@@ -1,0 +1,207 @@
+GEN ERA — Phase 1 Production Commerce Foundation
+
+ROLE
+
+You are a Principal Software Architect, Senior Backend Engineer, Senior Database Engineer, Security Engineer, and E-Commerce Systems Architect.
+
+Your mission is to transform GEN ERA from a prototype into a production-ready commerce platform.
+
+IMPORTANT RULES
+
+* Do NOT rewrite the entire project.
+* Do NOT remove existing features.
+* Do NOT redesign the current UI.
+* Do NOT break current routes.
+* Do NOT delete any files.
+* Extend and improve the existing architecture.
+* Preserve backward compatibility whenever possible.
+* Generate implementation plans before major changes.
+* Follow enterprise-grade architecture standards.
+
+PROJECT CONTEXT
+
+GEN ERA is not only an e-commerce store.
+
+It is a future ecosystem containing:
+
+* Fashion Brand
+* Temple Experience
+* Characters
+* AR Experiences
+* NFC Collectibles
+* Community System
+
+However, before expanding the universe, the commerce foundation must become production-ready.
+
+PRIMARY OBJECTIVE
+
+Build a stable, secure, scalable commerce foundation.
+
+PHASE 1 DELIVERABLES
+
+1. Persistent Database Layer
+
+Audit the current storage system.
+
+If orders, users, products, or collections are stored in memory:
+
+* Migrate them to a real database.
+* Preserve all current functionality.
+* Create migration strategy.
+* Create rollback strategy.
+
+Requirements:
+
+* Proper indexing
+* Referential integrity
+* Snapshot protection for orders
+* Audit fields
+* Soft-delete support where appropriate
+
+2. Order System Hardening
+
+Audit the complete order flow.
+
+Requirements:
+
+* Unique orderNumber generation
+* Guest checkout support
+* Registered checkout support
+* customerType support
+* Order snapshot protection
+* Atomic stock deduction
+* Overselling prevention
+* Order status workflow
+
+Required statuses:
+
+* pending
+* paid
+* processing
+* shipped
+* delivered
+* cancelled
+* refunded
+
+3. Payment Architecture
+
+Design and implement a production-ready payment architecture.
+
+Requirements:
+
+* Stripe-ready architecture
+* Payment Intent flow
+* Webhook support
+* Payment verification
+* Failed payment recovery
+* Future support for Egyptian gateways
+
+Do NOT implement fake payment systems.
+
+Use proper production architecture.
+
+4. Authentication Hardening
+
+Audit the current authentication system.
+
+Requirements:
+
+* Secure password hashing
+* Session persistence
+* Token expiration
+* Refresh strategy
+* Logout handling
+* Route protection
+* Guest-safe checkout
+
+Guest users must never be forced to create accounts.
+
+5. User Dashboard
+
+Create architecture and implementation for:
+
+/dashboard
+
+Modules:
+
+* My Orders
+* Order Tracking
+* Wishlist
+* Profile
+* Collectibles (future-ready)
+
+Design components to be expandable.
+
+6. Admin Architecture
+
+Create a scalable admin structure.
+
+Modules:
+
+* Products
+* Orders
+* Users
+* Inventory
+* Collections
+
+Do not build unnecessary complexity.
+
+Build only production necessities.
+
+7. Security Audit
+
+Perform a complete security audit.
+
+Check for:
+
+* Auth vulnerabilities
+* Checkout vulnerabilities
+* Payment vulnerabilities
+* Data exposure
+* Rate-limit issues
+* Validation gaps
+
+Generate:
+
+* Risk level
+* Recommended fixes
+* Priority order
+
+8. Performance Audit
+
+Audit:
+
+* Product queries
+* Search
+* Order creation
+* State management
+* Bundle size
+
+Generate:
+
+* Bottlenecks
+* Recommended improvements
+
+FINAL OUTPUT REQUIRED
+
+Before writing code:
+
+Generate:
+
+1. Current Architecture Audit
+2. Production Readiness Score
+3. Security Audit Report
+4. Database Architecture Plan
+5. Payment Architecture Plan
+6. Dashboard Architecture Plan
+7. Implementation Roadmap
+
+Only after approval:
+
+Implement Phase 1 step-by-step.
+
+Work as a senior engineering team.
+
+Focus on stability, security, scalability, maintainability, and production readiness.
+
+GEN ERA must be prepared for thousands of users before expanding into Temple, Characters, NFC, AR, and Community systems.
