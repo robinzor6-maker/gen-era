@@ -1,54 +1,62 @@
 import { Router, Request, Response } from "express";
-import { getUserFromToken } from "./auth";
-import { products } from "./products";
+import { and, eq, gte, sql } from "drizzle-orm";
+import { getUserFromToken } from "./auth.js";
+import { db, productsTable, ordersTable, orderItemsTable } from "../lib/db.js";
 
 const router = Router();
 
-// ─── In-memory order store ────────────────────────────────────────────────
-interface OrderItem {
-  productId: string;
-  name: string;
-  price: number;
-  image: string;
-  sku: string;
-  quantity: number;
-}
-
-interface OrderCustomer {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-}
-
-interface Order {
-  _id: string;
-  orderNumber: string;
-  user: string | null;
-  customerType: "guest" | "registered";
-  customer: OrderCustomer;
-  items: OrderItem[];
-  totalPrice: number;
-  notes: string;
-  status: "pending" | "paid" | "shipped" | "delivered";
-  paymentStatus: "unpaid" | "paid" | "refunded";
-  createdAt: string;
-  updatedAt: string;
-}
-
-const orders: Order[] = [];
-
 function generateOrderNumber(): string {
-  return `ORD-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(3, "0")}`;
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.floor(Math.random() * 46656).toString(36).toUpperCase().padStart(3, "0");
+  return `GE-${ts}-${rand}`;
+}
+
+function formatOrder(
+  order: typeof ordersTable.$inferSelect,
+  items: (typeof orderItemsTable.$inferSelect)[]
+) {
+  return {
+    _id: order.id,
+    orderNumber: order.orderNumber,
+    user: order.userId,
+    customerType: order.customerType,
+    customer: {
+      name: order.customerName,
+      email: order.customerEmail,
+      phone: order.customerPhone,
+      address: order.customerAddress,
+      city: order.customerCity,
+    },
+    items: items.map((i) => ({
+      productId: i.productId,
+      name: i.name,
+      price: i.price,
+      image: i.image,
+      sku: i.sku,
+      quantity: i.quantity,
+      selectedSize: i.selectedSize,
+      selectedColor: i.selectedColor,
+    })),
+    totalPrice: order.totalPrice,
+    notes: order.notes,
+    status: order.orderStatus,
+    paymentStatus: order.paymentStatus,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+  };
 }
 
 // POST /api/v1/orders  (guest or registered)
-router.post("/", (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   const { customer, items, notes } = req.body;
-  const user = getUserFromToken(req);
+  const authUser = await getUserFromToken(req);
 
-  if (!customer?.name?.trim() || !customer?.email?.trim() || !customer?.address?.trim() || !customer?.city?.trim()) {
+  if (
+    !customer?.name?.trim() ||
+    !customer?.email?.trim() ||
+    !customer?.address?.trim() ||
+    !customer?.city?.trim()
+  ) {
     res.status(400).json({ success: false, message: "Customer name, email, address and city are required." });
     return;
   }
@@ -58,81 +66,170 @@ router.post("/", (req: Request, res: Response) => {
     return;
   }
 
-  // Resolve prices from authoritative product catalog — never trust client-submitted prices
-  const resolvedItems: OrderItem[] = [];
-
-  for (const item of items as Array<{ productId: string; quantity: number }>) {
-    const product = products.find((p) => p._id === item.productId);
-    if (!product) {
-      res.status(400).json({ success: false, message: `Product not found: ${item.productId}` });
-      return;
-    }
-    resolvedItems.push({
-      productId: product._id,
-      name: product.name,
-      price: product.price,
-      image: product.image,
-      sku: product.slug,
-      quantity: Math.max(1, item.quantity),
-    });
-  }
-
-  // Compute authoritative total from server-side prices
-  const totalPrice = resolvedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-
-  const order: Order = {
-    _id: `order_${Date.now()}`,
-    orderNumber: generateOrderNumber(),
-    user: user?._id ?? null,
-    customerType: user ? "registered" : "guest",
-    customer: {
-      name: customer.name.trim(),
-      email: customer.email.trim().toLowerCase(),
-      phone: customer.phone?.trim() ?? "",
-      address: customer.address.trim(),
-      city: customer.city.trim(),
-    },
-    items: resolvedItems,
-    totalPrice,
-    notes: notes?.trim() ?? "",
-    status: "pending",
-    paymentStatus: "unpaid",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+  type ResolvedItem = {
+    productId: string;
+    name: string;
+    price: number;
+    image: string;
+    sku: string;
+    quantity: number;
+    selectedSize?: string;
+    selectedColor?: string;
   };
 
-  orders.push(order);
+  try {
+    const result = await db.transaction(async (tx) => {
+      // ── 1. Resolve all products from DB (authoritative prices) ──────────
+      const resolvedItems: ResolvedItem[] = [];
 
-  res.status(201).json({ success: true, data: order });
+      for (const item of items as Array<{ productId: string; quantity: number; selectedSize?: string; selectedColor?: string }>) {
+        const qty = Math.max(1, item.quantity);
+
+        // Support lookup by DB UUID (new) OR slug (backward compat with old cart)
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.productId);
+
+        const [product] = await tx
+          .select()
+          .from(productsTable)
+          .where(
+            and(
+              isUUID
+                ? eq(productsTable.id, item.productId)
+                : eq(productsTable.slug, item.productId),
+              eq(productsTable.active, true)
+            )
+          )
+          .limit(1);
+
+        if (!product) {
+          throw Object.assign(new Error(`Product not found: ${item.productId}`), { status: 400 });
+        }
+
+        resolvedItems.push({
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          image: product.image,
+          sku: product.slug,
+          quantity: qty,
+          selectedSize: item.selectedSize,
+          selectedColor: item.selectedColor,
+        });
+      }
+
+      // ── 2. Atomic stock deduction — one row-level check per item ────────
+      for (const item of resolvedItems) {
+        const updated = await tx
+          .update(productsTable)
+          .set({ stock: sql`${productsTable.stock} - ${item.quantity}` })
+          .where(
+            and(
+              eq(productsTable.id, item.productId),
+              gte(productsTable.stock, item.quantity)
+            )
+          )
+          .returning({ newStock: productsTable.stock });
+
+        if (updated.length === 0) {
+          throw Object.assign(
+            new Error(`Insufficient stock for: ${item.name}`),
+            { status: 409 }
+          );
+        }
+      }
+
+      // ── 3. Compute authoritative total ───────────────────────────────────
+      const totalPrice = resolvedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+
+      // ── 4. Insert order record ───────────────────────────────────────────
+      const [order] = await tx
+        .insert(ordersTable)
+        .values({
+          orderNumber: generateOrderNumber(),
+          userId: authUser?.id ?? null,
+          customerType: authUser ? "registered" : "guest",
+          customerName: customer.name.trim(),
+          customerEmail: customer.email.trim().toLowerCase(),
+          customerPhone: customer.phone?.trim() ?? "",
+          customerAddress: customer.address.trim(),
+          customerCity: customer.city.trim(),
+          totalPrice,
+          notes: notes?.trim() ?? "",
+          orderStatus: "pending",
+          paymentStatus: "unpaid",
+        })
+        .returning();
+
+      // ── 5. Insert order items ────────────────────────────────────────────
+      await tx.insert(orderItemsTable).values(
+        resolvedItems.map((i) => ({
+          orderId: order.id,
+          productId: i.productId,
+          name: i.name,
+          price: i.price,
+          image: i.image,
+          sku: i.sku,
+          quantity: i.quantity,
+          selectedSize: i.selectedSize ?? null,
+          selectedColor: i.selectedColor ?? null,
+        }))
+      );
+
+      return { order, items: resolvedItems };
+    });
+
+    res.status(201).json({ success: true, data: formatOrder(result.order, result.items as any) });
+  } catch (err: any) {
+    const status = err?.status ?? 500;
+    const message = err?.message ?? "Failed to create order.";
+    if (status < 500) {
+      res.status(status).json({ success: false, message });
+    } else {
+      throw err;
+    }
+  }
 });
 
 // GET /api/v1/orders  (requires auth)
-router.get("/", (req: Request, res: Response) => {
-  const user = getUserFromToken(req);
-  if (!user) {
+router.get("/", async (req: Request, res: Response) => {
+  const authUser = await getUserFromToken(req);
+  if (!authUser) {
     res.status(401).json({ success: false, message: "Authentication required." });
     return;
   }
 
-  const userOrders = user.role === "admin"
-    ? orders
-    : orders.filter((o) => o.user === user._id);
+  const orderRows = authUser.role === "admin"
+    ? await db.select().from(ordersTable).orderBy(sql`${ordersTable.createdAt} DESC`)
+    : await db.select().from(ordersTable).where(eq(ordersTable.userId, authUser.id));
 
-  res.json({
-    success: true,
-    data: userOrders,
-    pagination: { page: 1, limit: 50, total: userOrders.length, pages: 1 },
-  });
+  const result = await Promise.all(
+    orderRows.map(async (order) => {
+      const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+      return formatOrder(order, items);
+    })
+  );
+
+  res.json({ success: true, data: result, pagination: { page: 1, limit: 50, total: result.length, pages: 1 } });
 });
 
 // GET /api/v1/orders/:id
-router.get("/:id", (req: Request, res: Response) => {
-  const order = orders.find((o) => o._id === req.params.id || o.orderNumber === req.params.id);
+router.get("/:id", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+  const [order] = await db
+    .select()
+    .from(ordersTable)
+    .where(isUUID ? eq(ordersTable.id, id) : eq(ordersTable.orderNumber, id))
+    .limit(1);
+
   if (!order) {
     res.status(404).json({ success: false, message: "Order not found." });
     return;
   }
-  res.json({ success: true, data: order });
+
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+  res.json({ success: true, data: formatOrder(order, items) });
 });
 
 export default router;

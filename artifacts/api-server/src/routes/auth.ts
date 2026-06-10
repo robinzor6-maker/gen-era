@@ -1,20 +1,11 @@
 import { Router, Request, Response } from "express";
 import crypto from "crypto";
+import { eq } from "drizzle-orm";
+import { db, usersTable } from "../lib/db.js";
 
 const router = Router();
 
-// ─── Simple in-memory user store ─────────────────────────────────────────
-interface User {
-  _id: string;
-  name: string;
-  email: string;
-  passwordHash: string;
-  role: "user" | "admin";
-  avatar: string;
-  createdAt: string;
-}
-
-const users: User[] = [];
+// ─── In-memory token store (Step 2 will replace with JWT + DB sessions) ─────
 const tokens: Map<string, string> = new Map(); // token -> userId
 
 function hashPassword(password: string): string {
@@ -25,55 +16,79 @@ function generateToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
-function getUserFromToken(req: Request): User | null {
+type DbUser = typeof usersTable.$inferSelect;
+
+function safeUser(user: DbUser) {
+  return {
+    _id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    avatar: user.avatar,
+    isVerified: user.isVerified,
+    createdAt: user.createdAt,
+  };
+}
+
+export async function getUserFromToken(req: Request): Promise<DbUser | null> {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return null;
   const token = auth.slice(7);
   const userId = tokens.get(token);
   if (!userId) return null;
-  return users.find((u) => u._id === userId) || null;
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  return user ?? null;
 }
 
 // POST /api/v1/auth/register
-router.post("/register", (req: Request, res: Response) => {
+router.post("/register", async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
 
   if (!name?.trim() || !email?.trim() || !password) {
     res.status(400).json({ success: false, message: "Name, email and password are required." });
     return;
   }
-
   if (password.length < 6) {
     res.status(400).json({ success: false, message: "Password must be at least 6 characters." });
     return;
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  if (users.find((u) => u.email === normalizedEmail)) {
+
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, normalizedEmail))
+    .limit(1);
+
+  if (existing) {
     res.status(409).json({ success: false, message: "Email already registered." });
     return;
   }
 
-  const user: User = {
-    _id: `user_${Date.now()}`,
-    name: name.trim(),
-    email: normalizedEmail,
-    passwordHash: hashPassword(password),
-    role: "user",
-    avatar: "",
-    createdAt: new Date().toISOString(),
-  };
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      name: name.trim(),
+      email: normalizedEmail,
+      passwordHash: hashPassword(password),
+      role: "user",
+      avatar: "",
+    })
+    .returning();
 
-  users.push(user);
   const token = generateToken();
-  tokens.set(token, user._id);
+  tokens.set(token, user.id);
 
-  const { passwordHash: _, ...safeUser } = user;
-  res.status(201).json({ success: true, token, user: safeUser });
+  res.status(201).json({ success: true, token, user: safeUser(user) });
 });
 
 // POST /api/v1/auth/login
-router.post("/login", (req: Request, res: Response) => {
+router.post("/login", async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   if (!email?.trim() || !password) {
@@ -82,7 +97,11 @@ router.post("/login", (req: Request, res: Response) => {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const user = users.find((u) => u.email === normalizedEmail);
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, normalizedEmail))
+    .limit(1);
 
   if (!user || user.passwordHash !== hashPassword(password)) {
     res.status(401).json({ success: false, message: "Invalid email or password." });
@@ -90,22 +109,19 @@ router.post("/login", (req: Request, res: Response) => {
   }
 
   const token = generateToken();
-  tokens.set(token, user._id);
+  tokens.set(token, user.id);
 
-  const { passwordHash: _, ...safeUser } = user;
-  res.json({ success: true, token, user: safeUser });
+  res.json({ success: true, token, user: safeUser(user) });
 });
 
 // GET /api/v1/auth/profile
-router.get("/profile", (req: Request, res: Response) => {
-  const user = getUserFromToken(req);
+router.get("/profile", async (req: Request, res: Response) => {
+  const user = await getUserFromToken(req);
   if (!user) {
     res.status(401).json({ success: false, message: "Unauthorized" });
     return;
   }
-  const { passwordHash: _, ...safeUser } = user;
-  res.json({ success: true, data: safeUser });
+  res.json({ success: true, data: safeUser(user) });
 });
 
-export { getUserFromToken };
 export default router;

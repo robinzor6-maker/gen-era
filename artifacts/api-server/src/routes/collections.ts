@@ -1,66 +1,93 @@
 import { Router } from "express";
-import { products } from "./products";
+import { and, eq, sql } from "drizzle-orm";
+import { db, collectionsTable, productsTable } from "../lib/db.js";
 
 const router = Router();
 
-const collections = [
-  {
-    id: "coll_001",
-    slug: "void-season-i",
-    name: "VOID SEASON I",
-    description: "The inaugural collection. Born from darkness, built for the Temple. Core streetwear silhouettes infused with ancient power.",
-    season: "Autumn/Winter",
-    year: 2025,
-    coverGlyph: "𓂀",
-    theme: "The void between stars — where pharaohs become constellations.",
-  },
-  {
-    id: "coll_002",
-    slug: "ankh-protocol",
-    name: "ANKH PROTOCOL",
-    description: "Accessories and jewellery channeling the eternal symbol of life into wearable artifacts for the digital age.",
-    season: "Year-Round",
-    year: 2025,
-    coverGlyph: "𓋹",
-    theme: "The loop of life encoded in metal and light.",
-  },
-  {
-    id: "coll_003",
-    slug: "nile-fire",
-    name: "NILE FIRE",
-    description: "Statement outerwear. The heat of the desert sun captured in burnt-orange and reflective materials.",
-    season: "Limited Edition",
-    year: 2025,
-    coverGlyph: "𓆑",
-    theme: "When the Nile catches fire at dusk.",
-  },
-];
+type DbCollection = typeof collectionsTable.$inferSelect;
+
+function formatCollection(c: DbCollection, productCount: number) {
+  return {
+    _id: c.id,
+    slug: c.slug,
+    name: c.name,
+    description: c.description,
+    season: c.season,
+    year: c.year,
+    coverGlyph: c.coverGlyph,
+    coverImage: c.coverImage,
+    active: c.active,
+    productCount,
+    createdAt: c.createdAt,
+  };
+}
 
 // GET /api/v1/collections
-router.get("/", (_req, res) => {
-  const enriched = collections.map((c) => ({
-    ...c,
-    productCount: products.filter((p) => p.active && p.collection === c.slug).length,
-  }));
+router.get("/", async (_req, res) => {
+  const collections = await db
+    .select()
+    .from(collectionsTable)
+    .where(eq(collectionsTable.active, true));
+
+  const enriched = await Promise.all(
+    collections.map(async (c) => {
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(productsTable)
+        .where(
+          and(
+            eq(productsTable.active, true),
+            eq(productsTable.collection, c.slug)
+          )
+        );
+      return formatCollection(c, count);
+    })
+  );
+
   res.json({ success: true, data: enriched });
 });
 
 // GET /api/v1/collections/:slug
-router.get("/:slug", (req, res) => {
-  const collection = collections.find((c) => c.slug === req.params.slug);
+router.get("/:slug", async (req, res) => {
+  const [collection] = await db
+    .select()
+    .from(collectionsTable)
+    .where(
+      and(
+        eq(collectionsTable.slug, req.params.slug),
+        eq(collectionsTable.active, true)
+      )
+    )
+    .limit(1);
+
   if (!collection) {
     res.status(404).json({ success: false, message: "Collection not found" });
     return;
   }
-  const collectionProducts = products.filter(
-    (p) => p.active && p.collection === req.params.slug
-  );
+
+  const products = await db
+    .select()
+    .from(productsTable)
+    .where(
+      and(
+        eq(productsTable.active, true),
+        eq(productsTable.collection, collection.slug)
+      )
+    );
+
   res.json({
     success: true,
     data: {
-      ...collection,
-      productCount: collectionProducts.length,
-      products: collectionProducts,
+      ...formatCollection(collection, products.length),
+      products: products.map((p) => ({
+        _id: p.id,
+        slug: p.slug,
+        name: p.name,
+        price: p.price,
+        image: p.image,
+        stock: p.stock,
+        featured: p.featured,
+      })),
     },
   });
 });
