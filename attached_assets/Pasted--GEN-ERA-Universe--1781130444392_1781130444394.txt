@@ -1,0 +1,508 @@
+إذا كنت تريد بناء **GEN ERA Universe** بشكل احترافي وبدون أن يتحول المشروع إلى فوضى أو يتم كسر الأنظمة الحالية، فالتنفيذ يجب أن يكون على مراحل واضحة.
+
+# المرحلة 0 — تجميد النسخة الحالية (يوم واحد)
+
+قبل أي تطوير جديد:
+
+### 1. عمل نسخة آمنة
+
+```bash
+git status
+git add .
+git commit -m "GEN ERA Stable Commerce Build"
+git push origin develop
+```
+
+### 2. إنشاء فرع جديد
+
+```bash
+git checkout -b universe-phase-1
+```
+
+الهدف:
+
+* الحفاظ على نسخة المتجر الحالية.
+* إمكانية الرجوع للخلف في أي لحظة.
+
+---
+
+# المرحلة 1 — بناء عالم GEN ERA (الأولوية القصوى)
+
+## الهدف
+
+تحويل الصفحة الرئيسية إلى عالم حي.
+
+### التنفيذ
+
+### 1. إنشاء Homepage جديدة
+
+بدل الصفحة الحالية.
+
+المسار:
+
+```txt
+app/page.tsx
+```
+
+تفتح على:
+
+```txt
+Temple Experience
+```
+
+---
+
+### 2. بناء Intro Cinematic
+
+إنشاء:
+
+```txt
+components/intro/
+```
+
+الملفات:
+
+```txt
+IntroSequence.tsx
+LogoReveal.tsx
+VoidActivation.tsx
+SkipButton.tsx
+```
+
+المدة:
+
+```txt
+5-8 ثواني
+```
+
+---
+
+### 3. بناء Audio System
+
+إنشاء:
+
+```txt
+lib/audio/
+```
+
+يتحكم في:
+
+* الموسيقى
+* المؤثرات
+* الأصوات
+
+---
+
+### 4. إضافة Fog + Atmosphere
+
+داخل المعبد.
+
+استخدام:
+
+```txt
+Three.js
+React Three Fiber
+```
+
+إضافة:
+
+* ضباب
+* جسيمات
+* إضاءة ديناميكية
+
+---
+
+# المرحلة 2 — Product Statues
+
+## الهدف
+
+تحويل المنتجات إلى تماثيل داخل المعبد.
+
+### التنفيذ
+
+إنشاء:
+
+```txt
+components/statues/
+```
+
+الملفات:
+
+```txt
+ProductStatue.tsx
+StatuePedestal.tsx
+StatueLabel.tsx
+```
+
+---
+
+كل منتج:
+
+```txt
+Product
+↓
+Statue
+↓
+Temple Display
+```
+
+---
+
+عند الضغط:
+
+```txt
+Open Product Chamber
+```
+
+---
+
+# المرحلة 3 — Product Chamber
+
+## الهدف
+
+غرفة عرض أسطورية للمنتج.
+
+### التنفيذ
+
+إنشاء:
+
+```txt
+app/chamber/[slug]
+```
+
+---
+
+محتويات الغرفة:
+
+### Cinematic Transition
+
+* Blur
+* Fog
+* Zoom
+* Sound
+
+---
+
+### Product Viewer
+
+3D Viewer
+
+---
+
+### AR Button
+
+ربط مع:
+
+```txt
+/ar
+```
+
+---
+
+### Lore
+
+عرض القصة المرتبطة بالقطعة.
+
+---
+
+### Character
+
+عرض الشخصية المرتبطة بالقطعة.
+
+---
+
+# المرحلة 4 — Character Universe
+
+## الهدف
+
+إنشاء عالم الشخصيات.
+
+---
+
+إنشاء:
+
+```txt
+app/characters
+```
+
+---
+
+الشخصيات:
+
+### ANKHRON
+
+يمثل:
+
+```txt
+Past
+Control
+Wisdom
+```
+
+---
+
+### OSYRON
+
+يمثل:
+
+```txt
+Fire
+Revolution
+Energy
+```
+
+---
+
+كل شخصية تحتوي:
+
+* Biography
+* Story
+* Voice
+* Products
+* Collectibles
+
+---
+
+# المرحلة 5 — NFC Collectibles
+
+## الهدف
+
+ربط المنتجات الفيزيائية بالموقع.
+
+---
+
+إنشاء:
+
+```txt
+app/collectible/[id]
+```
+
+---
+
+عند عمل Scan:
+
+```txt
+NFC
+↓
+Unique ID
+↓
+Collectible Page
+```
+
+---
+
+يتم عرض:
+
+* الشخصية
+* القصة
+* القطعة
+* المكافآت
+
+---
+
+# المرحلة 6 — User Inventory
+
+## الهدف
+
+إعطاء المستخدم مخزن رقمي.
+
+---
+
+إنشاء:
+
+```txt
+app/account
+```
+
+---
+
+أقسامه:
+
+### Products
+
+المنتجات المشتراة
+
+---
+
+### Characters
+
+الشخصيات المفتوحة
+
+---
+
+### Collectibles
+
+التماثيل
+
+---
+
+### Lore
+
+الفصول المفتوحة
+
+---
+
+# المرحلة 7 — GEN ERA Try-On
+
+## الهدف
+
+التجربة الافتراضية.
+
+---
+
+إنشاء:
+
+```txt
+app/try-on
+```
+
+---
+
+النسخة الأولى:
+
+### Upload Image
+
+رفع صورة.
+
+---
+
+### Overlay System
+
+عرض القطعة على الصورة.
+
+---
+
+النسخة الثانية لاحقًا:
+
+AI Try-On
+
+---
+
+# المرحلة 8 — قاعدة البيانات الاحترافية
+
+## الهدف
+
+تحويل العالم إلى نظام مترابط.
+
+---
+
+إضافة جداول:
+
+```txt
+Users
+Products
+Orders
+Characters
+Collectibles
+Collections
+Lore
+UserInventory
+```
+
+---
+
+العلاقات:
+
+```txt
+Product
+↔ Character
+
+Character
+↔ Lore
+
+Lore
+↔ Collection
+
+Collection
+↔ Product
+
+Collectible
+↔ Character
+
+Collectible
+↔ User
+```
+
+---
+
+# المرحلة 9 — Dashboard Admin
+
+## الهدف
+
+إدارة الكون بالكامل.
+
+---
+
+إنشاء:
+
+```txt
+/admin
+```
+
+---
+
+إدارة:
+
+* المنتجات
+* الشخصيات
+* القصص
+* الطلبات
+* التماثيل
+* المستخدمين
+
+---
+
+# المرحلة 10 — الإطلاق النهائي
+
+قبل الإطلاق:
+
+### Stripe
+
+الدفع.
+
+---
+
+### Email
+
+التأكيدات.
+
+---
+
+### Analytics
+
+الإحصائيات.
+
+---
+
+### SEO
+
+تحسين الظهور.
+
+---
+
+### Performance
+
+تحسين السرعة.
+
+---
+
+# الترتيب الذي أنصحك به الآن
+
+لا تبدأ بـ NFC أو Try-On.
+
+نفّذ بالترتيب:
+
+```txt
+1. Temple Homepage
+2. Intro Cinematic
+3. Product Statues
+4. Product Chamber
+5. Character Universe
+6. User Inventory
+7. PostgreSQL
+8. Stripe
+9. NFC Collectibles
+10. AI Try-On
+```
+
+بهذا الأسلوب ستبني GEN ERA كعالم متكامل خطوة بخطوة مع الحفاظ على استقرار المتجر الحالي وعدم إضاعة الوقت في أنظمة متقدمة قبل اكتمال الأساس.
