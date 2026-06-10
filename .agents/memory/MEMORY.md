@@ -1,3 +1,5 @@
 - [GEN ERA migration patterns](gen-era-migration.md) — Next.js→Vite: useRouter→useLocation/useParams (wouter), next/image→img, process.env→import.meta.env.VITE_*
 - [SearchBar infinite loop fix](searchbar-loop-fix.md) — useCallback(fn, [onSearch]) causes infinite loops when parent recreates handler; fix: useRef pattern
 - [API server in-memory backend](api-server-inmemory.md) — API server uses in-memory stores for products/auth/orders; routes at /api/v1/*; no DB yet
+- [Product type expansions](product-type-v2.md) — Product now has colors[], sizes[], comparePrice, collection, material, weight, shippingInfo, rating, reviewCount; CartItem has selectedSize/selectedColor
+- [Collections route pattern](collections-route.md) — /api/v1/collections imports products from products.ts (exported array) to count products per collection; avoids data duplication

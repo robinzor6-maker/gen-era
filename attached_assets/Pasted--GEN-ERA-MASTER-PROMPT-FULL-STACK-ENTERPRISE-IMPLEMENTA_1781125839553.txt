@@ -1,0 +1,420 @@
+# GEN ERA MASTER PROMPT — FULL STACK ENTERPRISE IMPLEMENTATION
+
+You are a Senior Staff Software Engineer, Senior Technical Architect, Senior UX Engineer, Senior 3D Web Engineer, Senior E-Commerce Engineer, and Senior DevOps Engineer.
+
+Your task is NOT to create a new project.
+
+Your task is to ANALYZE the existing GEN ERA codebase completely and continue building on top of the current architecture.
+
+Before writing any code:
+
+1. Scan the entire repository.
+2. Understand every folder.
+3. Understand dependencies.
+4. Understand current implementation.
+5. Detect broken components.
+6. Detect missing functionality.
+7. Detect unused code.
+8. Detect architecture problems.
+9. Detect performance issues.
+10. Create an implementation plan.
+
+Never rewrite working code unnecessarily.
+
+Always extend existing architecture.
+
+---
+
+# PROJECT VISION
+
+GEN ERA is not a normal clothing website.
+
+It is:
+
+* Fashion Brand
+* Digital Experience
+* Cyberpunk Egyptian Universe
+* Luxury Streetwear Platform
+* Interactive 3D Experience
+* AR Fashion Platform
+* Future Community Ecosystem
+
+The experience should feel closer to:
+
+* Apple Vision Pro
+* Balenciaga
+* Nike Future Lab
+* Tesla
+* Anyma
+* Unreal Engine Experiences
+
+than a traditional online store.
+
+---
+
+# PHASE 1 — COMPLETE CODEBASE AUDIT
+
+Perform a full repository audit.
+
+Generate reports for:
+
+* Folder structure
+* Component architecture
+* State management
+* API architecture
+* Database architecture
+* Security issues
+* Performance bottlenecks
+* SEO issues
+* Accessibility issues
+* Mobile responsiveness issues
+* Rendering issues
+
+Create TODO lists.
+
+Create improvement roadmap.
+
+---
+
+# PHASE 2 — PRODUCT SYSTEM
+
+Implement a professional ecommerce architecture.
+
+Create:
+
+Product Entity
+
+Fields:
+
+* id
+* slug
+* name
+* subtitle
+* collection
+* description
+* longDescription
+* price
+* comparePrice
+* colors
+* sizes
+* images
+* gallery
+* 3DModel
+* inventory
+* tags
+* rating
+* reviews
+* material
+* weight
+* shippingInfo
+* createdAt
+* updatedAt
+
+---
+
+# PHASE 3 — PRODUCT DETAIL EXPERIENCE
+
+When clicking any product:
+
+Open a premium Product Experience.
+
+Do not open a normal ecommerce page.
+
+Create cinematic transition.
+
+Use:
+
+Framer Motion
+
+Animations:
+
+* blur
+* zoom
+* glow
+* camera movement
+* fade
+
+Target:
+
+60 FPS
+
+---
+
+# PHASE 4 — 3D PRODUCT VIEWER
+
+Build advanced 3D viewer.
+
+Stack:
+
+* React Three Fiber
+* Drei
+* GLTF
+* HDR Environment
+
+Features:
+
+* rotate
+* zoom
+* inspect
+* hotspots
+* fabric details
+* logo details
+
+Use lazy loading.
+
+Optimize performance.
+
+Create fallback loaders.
+
+---
+
+# PHASE 5 — AR TRY ON SYSTEM
+
+Create complete AR architecture.
+
+Frontend:
+
+* AR button
+* camera access
+* permissions
+* device detection
+
+Backend:
+
+* AR session endpoints
+* analytics tracking
+* event logging
+
+Future-ready for:
+
+* Snapchat Lens
+* Instagram AR
+* WebXR
+* Apple Vision Pro
+
+Create interfaces now even if external integrations come later.
+
+---
+
+# PHASE 6 — BACKEND
+
+Build production-grade backend.
+
+Implement:
+
+Products API
+
+/api/products
+
+/api/products/[slug]
+
+Inventory API
+
+Review API
+
+Analytics API
+
+AR API
+
+User API
+
+Wishlist API
+
+Orders API
+
+Collections API
+
+Admin API
+
+Validation:
+
+Zod
+
+Security:
+
+Rate Limiting
+
+Sanitization
+
+Validation
+
+Error Handling
+
+Logging
+
+---
+
+# PHASE 7 — DATABASE
+
+Implement scalable schema.
+
+Recommended:
+
+PostgreSQL
+
+ORM:
+
+Prisma
+
+Models:
+
+* User
+* Product
+* ProductVariant
+* Collection
+* Review
+* Wishlist
+* Order
+* OrderItem
+* Inventory
+* AnalyticsEvent
+* ARSession
+
+Generate migrations.
+
+Generate seeds.
+
+Generate relationships.
+
+---
+
+# PHASE 8 — CMS
+
+Create admin dashboard.
+
+Manage:
+
+Products
+
+Inventory
+
+Collections
+
+Reviews
+
+Orders
+
+Users
+
+AR Assets
+
+Analytics
+
+---
+
+# PHASE 9 — PERFORMANCE
+
+Target:
+
+95+ Lighthouse
+
+Implement:
+
+* Dynamic Imports
+* Lazy Loading
+* Code Splitting
+* Asset Compression
+* Image Optimization
+* Suspense
+* Streaming
+* Memoization
+
+Remove bottlenecks.
+
+---
+
+# PHASE 10 — MOBILE EXPERIENCE
+
+Fully optimize:
+
+* Android
+* iPhone
+* Tablets
+
+All interactions must remain smooth.
+
+---
+
+# PHASE 11 — SEO
+
+Implement:
+
+Metadata
+
+Open Graph
+
+Twitter Cards
+
+Structured Data
+
+Product Schema
+
+Collection Schema
+
+Sitemap
+
+Robots
+
+Canonical URLs
+
+---
+
+# PHASE 12 — ANALYTICS
+
+Implement:
+
+Product Views
+
+AR Opens
+
+Cart Adds
+
+Wishlist Adds
+
+Checkout Events
+
+Collection Views
+
+3D Interaction Tracking
+
+User Journey Tracking
+
+---
+
+# PHASE 13 — PRODUCTION READINESS
+
+Before finishing:
+
+Run full audit.
+
+Verify:
+
+* no TypeScript errors
+* no ESLint errors
+* no hydration errors
+* no memory leaks
+* no unused components
+* no duplicated code
+
+Refactor where necessary.
+
+---
+
+# FINAL GOAL
+
+Transform GEN ERA from a simple website into a premium futuristic fashion-tech platform featuring:
+
+* Luxury ecommerce
+* Immersive 3D experience
+* AR Try-On ecosystem
+* Scalable backend
+* Enterprise architecture
+* Production-ready codebase
+
+Build on the existing codebase only.
+
+Do not replace architecture without reason.
+
+Document every major change.
+
+Commit changes incrementally and professionally.

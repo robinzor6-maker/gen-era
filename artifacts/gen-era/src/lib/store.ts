@@ -8,7 +8,7 @@ interface CartStore {
   cartTotal: number;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  addToCart: (product: Product, quantity?: number) => void;
+  addToCart: (product: Product, quantity?: number, selectedSize?: string, selectedColor?: string) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
@@ -23,7 +23,7 @@ export const useCartStore = create<CartStore>()(
       isOpen: false,
       setIsOpen: (open) => set({ isOpen: open }),
 
-      addToCart: (product: Product, quantity = 1) => {
+      addToCart: (product: Product, quantity = 1, selectedSize?: string, selectedColor?: string) => {
         const { items } = get();
         const existing = items.find((item) => item.productId === product._id);
 
@@ -42,6 +42,8 @@ export const useCartStore = create<CartStore>()(
             price: product.price,
             image: product.image,
             quantity,
+            selectedSize,
+            selectedColor,
           };
           newItems = [...items, newItem];
         }
@@ -80,6 +82,45 @@ export const useCartStore = create<CartStore>()(
   )
 );
 
+// ─── Wishlist Store ────────────────────────────────────────────────────────
+interface WishlistStore {
+  items: string[];
+  isInWishlist: (productId: string) => boolean;
+  toggleWishlist: (productId: string) => void;
+  addToWishlist: (productId: string) => void;
+  removeFromWishlist: (productId: string) => void;
+  clearWishlist: () => void;
+}
+
+export const useWishlistStore = create<WishlistStore>()(
+  persist(
+    (set, get) => ({
+      items: [],
+      isInWishlist: (productId: string) => get().items.includes(productId),
+      toggleWishlist: (productId: string) => {
+        const { items } = get();
+        if (items.includes(productId)) {
+          set({ items: items.filter((id) => id !== productId) });
+        } else {
+          set({ items: [...items, productId] });
+        }
+      },
+      addToWishlist: (productId: string) => {
+        const { items } = get();
+        if (!items.includes(productId)) {
+          set({ items: [...items, productId] });
+        }
+      },
+      removeFromWishlist: (productId: string) => {
+        set({ items: get().items.filter((id) => id !== productId) });
+      },
+      clearWishlist: () => set({ items: [] }),
+    }),
+    { name: 'gen-era-wishlist' }
+  )
+);
+
+// ─── App / Auth Store ──────────────────────────────────────────────────────
 interface AppStore {
   user: User | null;
   token: string | null;

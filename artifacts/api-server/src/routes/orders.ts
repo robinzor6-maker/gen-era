@@ -1,27 +1,8 @@
 import { Router, Request, Response } from "express";
 import { getUserFromToken } from "./auth";
+import { products } from "./products";
 
 const router = Router();
-
-// ─── Import product catalog for price validation ──────────────────────────
-// We import at runtime to avoid circular dependencies
-let _products: Array<{ _id: string; slug: string; name: string; price: number; image: string; stock: number }> = [];
-
-async function getProducts() {
-  if (_products.length === 0) {
-    // Dynamic import to get the products list from the products route module
-    // For now we replicate the seed data to avoid circular imports
-    _products = [
-      { _id: "prod_001", slug: "pharaoh-cyber-hoodie", name: "PHARAOH CYBER HOODIE", price: 2800, image: "", stock: 15 },
-      { _id: "prod_002", slug: "void-eye-pendant", name: "VOID EYE PENDANT", price: 950, image: "", stock: 42 },
-      { _id: "prod_003", slug: "obsidian-cargo-pants", name: "OBSIDIAN CARGO PANTS", price: 1800, image: "", stock: 8 },
-      { _id: "prod_004", slug: "desert-storm-cap", name: "DESERT STORM CAP", price: 650, image: "", stock: 30 },
-      { _id: "prod_005", slug: "nile-fire-jacket", name: "NILE FIRE JACKET", price: 3200, image: "", stock: 5 },
-      { _id: "prod_006", slug: "ankh-chain-bracelet", name: "ANKH CHAIN BRACELET", price: 480, image: "", stock: 0 },
-    ];
-  }
-  return _products;
-}
 
 // ─── In-memory order store ────────────────────────────────────────────────
 interface OrderItem {
@@ -36,7 +17,7 @@ interface OrderItem {
 interface OrderCustomer {
   name: string;
   email: string;
-  phone?: string;
+  phone: string;
   address: string;
   city: string;
 }
@@ -49,7 +30,7 @@ interface Order {
   customer: OrderCustomer;
   items: OrderItem[];
   totalPrice: number;
-  notes?: string;
+  notes: string;
   status: "pending" | "paid" | "shipped" | "delivered";
   paymentStatus: "unpaid" | "paid" | "refunded";
   createdAt: string;
@@ -63,11 +44,10 @@ function generateOrderNumber(): string {
 }
 
 // POST /api/v1/orders  (guest or registered)
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", (req: Request, res: Response) => {
   const { customer, items, notes } = req.body;
   const user = getUserFromToken(req);
 
-  // Validation
   if (!customer?.name?.trim() || !customer?.email?.trim() || !customer?.address?.trim() || !customer?.city?.trim()) {
     res.status(400).json({ success: false, message: "Customer name, email, address and city are required." });
     return;
@@ -79,11 +59,10 @@ router.post("/", async (req: Request, res: Response) => {
   }
 
   // Resolve prices from authoritative product catalog — never trust client-submitted prices
-  const catalog = await getProducts();
   const resolvedItems: OrderItem[] = [];
 
   for (const item of items as Array<{ productId: string; quantity: number }>) {
-    const product = catalog.find((p) => p._id === item.productId);
+    const product = products.find((p) => p._id === item.productId);
     if (!product) {
       res.status(400).json({ success: false, message: `Product not found: ${item.productId}` });
       return;
@@ -104,18 +83,18 @@ router.post("/", async (req: Request, res: Response) => {
   const order: Order = {
     _id: `order_${Date.now()}`,
     orderNumber: generateOrderNumber(),
-    user: user ? user._id : null,
+    user: user?._id ?? null,
     customerType: user ? "registered" : "guest",
     customer: {
       name: customer.name.trim(),
       email: customer.email.trim().toLowerCase(),
-      phone: customer.phone?.trim() || "",
+      phone: customer.phone?.trim() ?? "",
       address: customer.address.trim(),
       city: customer.city.trim(),
     },
     items: resolvedItems,
     totalPrice,
-    notes: notes?.trim() || "",
+    notes: notes?.trim() ?? "",
     status: "pending",
     paymentStatus: "unpaid",
     createdAt: new Date().toISOString(),
@@ -123,29 +102,33 @@ router.post("/", async (req: Request, res: Response) => {
   };
 
   orders.push(order);
+
   res.status(201).json({ success: true, data: order });
 });
 
-// GET /api/v1/orders/my  (authenticated)
-router.get("/my", (req: Request, res: Response) => {
+// GET /api/v1/orders  (requires auth)
+router.get("/", (req: Request, res: Response) => {
   const user = getUserFromToken(req);
   if (!user) {
     res.status(401).json({ success: false, message: "Authentication required." });
     return;
   }
-  const myOrders = orders.filter((o) => o.user === user._id);
-  res.json({ success: true, data: myOrders, pagination: { page: 1, limit: 50, total: myOrders.length, pages: 1 } });
+
+  const userOrders = user.role === "admin"
+    ? orders
+    : orders.filter((o) => o.user === user._id);
+
+  res.json({
+    success: true,
+    data: userOrders,
+    pagination: { page: 1, limit: 50, total: userOrders.length, pages: 1 },
+  });
 });
 
 // GET /api/v1/orders/:id
 router.get("/:id", (req: Request, res: Response) => {
-  const user = getUserFromToken(req);
-  if (!user) {
-    res.status(401).json({ success: false, message: "Authentication required." });
-    return;
-  }
-  const order = orders.find((o) => o._id === req.params.id);
-  if (!order || (order.user !== user._id && user.role !== "admin")) {
+  const order = orders.find((o) => o._id === req.params.id || o.orderNumber === req.params.id);
+  if (!order) {
     res.status(404).json({ success: false, message: "Order not found." });
     return;
   }

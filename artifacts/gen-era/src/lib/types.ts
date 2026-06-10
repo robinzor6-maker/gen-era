@@ -1,19 +1,35 @@
+export interface ProductColor {
+  name: string;
+  hex: string;
+}
+
 export interface Product {
   _id: string;
   slug: string;
   name: string;
+  subtitle: string;
+  collection: string;
   shortDescription: string;
   description: string;
+  longDescription?: string;
   price: number;
+  comparePrice?: number;
   category: 'clothing' | 'accessories';
   tags: string[];
+  colors: ProductColor[];
+  sizes: string[];
   image: string;
   gallery: string[];
   modelPath: string;
   texturePath?: string;
+  material?: string;
+  weight?: string;
+  shippingInfo?: string;
   stock: number;
   featured: boolean;
   active: boolean;
+  rating: number;
+  reviewCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,6 +41,8 @@ export interface CartItem {
   price: number;
   image: string;
   quantity: number;
+  selectedSize?: string;
+  selectedColor?: string;
 }
 
 export interface OrderItem {
@@ -113,4 +131,15 @@ export interface AuthResponse {
   success: boolean;
   token: string;
   user: User;
+}
+
+export interface Collection {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  season: string;
+  year: number;
+  coverGlyph: string;
+  productCount: number;
 }
