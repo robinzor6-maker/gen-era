@@ -1,3 +1,4 @@
+- [Expo dev proxy wrapper](expo-dev-proxy.md) — Metro startup too slow for workflow health check; fix: node wrapper opens port instantly, proxies to Metro on PORT+1, strips CORS origin header
 - [GEN ERA migration patterns](gen-era-migration.md) — Next.js→Vite: useRouter→useLocation/useParams (wouter), next/image→img, process.env→import.meta.env.VITE_*
 - [SearchBar infinite loop fix](searchbar-loop-fix.md) — useCallback(fn, [onSearch]) causes infinite loops when parent recreates handler; fix: useRef pattern
 - [API server in-memory backend](api-server-inmemory.md) — API server uses in-memory stores for products/auth/orders; routes at /api/v1/*; no DB yet
