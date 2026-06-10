@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { CartItem, Product, User } from '@/lib/types';
 
 /**
@@ -12,69 +13,80 @@ interface CartStore {
   items: CartItem[];
   cartCount: number;
   cartTotal: number;
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
   addToCart: (product: Product, quantity?: number) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
 }
 
-export const useCartStore = create<CartStore>((set, get) => ({
-  items: [],
-  cartCount: 0,
-  cartTotal: 0,
+export const useCartStore = create<CartStore>()(
+  persist(
+    (set, get) => ({
+      items: [],
+      cartCount: 0,
+      cartTotal: 0,
+      isOpen: false,
+      setIsOpen: (open) => set({ isOpen: open }),
 
-  addToCart: (product: Product, quantity = 1) => {
-    const { items } = get();
-    const existing = items.find((item) => item.productId === product._id);
+      addToCart: (product: Product, quantity = 1) => {
+        const { items } = get();
+        const existing = items.find((item) => item.productId === product._id);
 
-    let newItems: CartItem[];
-    if (existing) {
-      newItems = items.map((item) =>
-        item.productId === product._id
-          ? { ...item, quantity: item.quantity + quantity }
-          : item
-      );
-    } else {
-      // SNAPSHOT — capture price and image now
-      const newItem: CartItem = {
-        productId: product._id,
-        slug: product.slug,
-        name: product.name,
-        price: product.price,    // SNAPSHOT
-        image: product.image,    // SNAPSHOT
-        quantity,
-      };
-      newItems = [...items, newItem];
+        let newItems: CartItem[];
+        if (existing) {
+          newItems = items.map((item) =>
+            item.productId === product._id
+              ? { ...item, quantity: item.quantity + quantity }
+              : item
+          );
+        } else {
+          // SNAPSHOT — capture price and image now
+          const newItem: CartItem = {
+            productId: product._id,
+            slug: product.slug,
+            name: product.name,
+            price: product.price,    // SNAPSHOT
+            image: product.image,    // SNAPSHOT
+            quantity,
+          };
+          newItems = [...items, newItem];
+        }
+
+        const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
+        const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+
+        set({ items: newItems, cartCount, cartTotal, isOpen: true }); // Open cart drawer on add!
+      },
+
+      removeFromCart: (productId: string) => {
+        const newItems = get().items.filter((item) => item.productId !== productId);
+        const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
+        const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+        set({ items: newItems, cartCount, cartTotal });
+      },
+
+      updateQuantity: (productId: string, quantity: number) => {
+        if (quantity < 1) {
+          get().removeFromCart(productId);
+          return;
+        }
+        const newItems = get().items.map((item) =>
+          item.productId === productId ? { ...item, quantity } : item
+        );
+        const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
+        const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+        set({ items: newItems, cartCount, cartTotal });
+      },
+
+      clearCart: () => set({ items: [], cartCount: 0, cartTotal: 0 }),
+    }),
+    {
+      name: 'gen-era-cart',
     }
-
-    const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
-    const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-
-    set({ items: newItems, cartCount, cartTotal });
-  },
-
-  removeFromCart: (productId: string) => {
-    const newItems = get().items.filter((item) => item.productId !== productId);
-    const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
-    const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-    set({ items: newItems, cartCount, cartTotal });
-  },
-
-  updateQuantity: (productId: string, quantity: number) => {
-    if (quantity < 1) {
-      get().removeFromCart(productId);
-      return;
-    }
-    const newItems = get().items.map((item) =>
-      item.productId === productId ? { ...item, quantity } : item
-    );
-    const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
-    const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-    set({ items: newItems, cartCount, cartTotal });
-  },
-
-  clearCart: () => set({ items: [], cartCount: 0, cartTotal: 0 }),
-}));
+  )
+);
 
 /**
  * GEN ERA — Auth + Scene Store (unchanged global store)

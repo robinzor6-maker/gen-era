@@ -6,6 +6,7 @@ import { useProductStore } from '@/stores/productStore';
 import ProductViewer from '@/components/store/ProductViewer';
 import ProductGallery from '@/components/store/ProductGallery';
 import AddToCartButton from '@/components/store/AddToCartButton';
+import { useCartStore } from '@/lib/store';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -24,6 +25,9 @@ export default function ProductDetailPage({ params }: PageProps) {
     fetchProduct,
     clearSelection,
   } = useProductStore();
+
+  const cartCount = useCartStore((s) => s.cartCount);
+  const setIsOpen = useCartStore((s) => s.setIsOpen);
 
   const [activeTab, setActiveTab] = useState<'3d' | 'gallery'>('gallery');
 
@@ -55,7 +59,9 @@ export default function ProductDetailPage({ params }: PageProps) {
               <span className="label store-eyebrow">GEN ERA — ACCESSING DATA</span>
               <h1 className="store-title font-display">RETRIEVING...</h1>
             </div>
-            <div style={{ width: '40px' }} />
+            <button className="btn-gold font-mono" style={{ fontSize: '0.75rem', padding: '6px 14px' }} onClick={() => setIsOpen(true)}>
+              CART <span style={{ color: 'var(--fire)' }}>{cartCount}</span>
+            </button>
           </div>
         </header>
         <div className="detail-container">
@@ -87,7 +93,9 @@ export default function ProductDetailPage({ params }: PageProps) {
               <span className="label store-eyebrow">GEN ERA — ERROR</span>
               <h1 className="store-title font-display">NOT FOUND</h1>
             </div>
-            <div style={{ width: '40px' }} />
+            <button className="btn-gold font-mono" style={{ fontSize: '0.75rem', padding: '6px 14px' }} onClick={() => setIsOpen(true)}>
+              CART <span style={{ color: 'var(--fire)' }}>{cartCount}</span>
+            </button>
           </div>
         </header>
         <div className="store-empty" style={{ margin: '80px auto' }}>
@@ -113,7 +121,9 @@ export default function ProductDetailPage({ params }: PageProps) {
             <span className="label store-eyebrow">GEN ERA — PRODUCT SPECIFICATION</span>
             <h1 className="store-title font-display">{product.name}</h1>
           </div>
-          <div style={{ width: '40px' }} />
+          <button className="btn-gold font-mono" style={{ fontSize: '0.75rem', padding: '6px 14px' }} onClick={() => setIsOpen(true)}>
+            CART <span style={{ color: 'var(--fire)' }}>{cartCount}</span>
+          </button>
         </div>
       </header>
 

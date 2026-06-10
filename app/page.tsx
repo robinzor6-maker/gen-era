@@ -1,14 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import Viewer from "@/components/store/Viewer";
-import { products } from "@/components/store/products";
+import { useProductStore } from "@/stores/productStore";
+import { useCartStore } from "@/lib/store";
+import { Product } from "@/lib/types";
+
+function formatPrice(price: number): string {
+  return price.toLocaleString('ar-EG') + ' ج.م';
+}
 
 export default function Home() {
-  const [selected, setSelected] = useState(products[0]);
+  const {
+    products,
+    loading,
+    error,
+    fetchProducts,
+    clearError,
+  } = useProductStore();
+
+  const addToCart = useCartStore((s) => s.addToCart);
+  const cartCount = useCartStore((s) => s.cartCount);
+  const setIsOpen = useCartStore((s) => s.setIsOpen);
+
+  const [selected, setSelected] = useState<Product | null>(null);
   const [qty, setQty] = useState(1);
-  const [cartCount, setCartCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchProducts({ limit: "6" });
+  }, [fetchProducts]);
+
+  useEffect(() => {
+    if (products.length > 0 && !selected) {
+      setSelected(products[0]);
+    }
+  }, [products, selected]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -16,7 +44,12 @@ export default function Home() {
   }
 
   function handleAddToCart() {
-    setCartCount((c) => c + qty);
+    if (!selected) return;
+    if (selected.stock === 0) {
+      showToast(`✗ ${selected.name.substring(0, 20)} — OUT OF STOCK`);
+      return;
+    }
+    addToCart(selected, qty);
     showToast(`✓ ${selected.name.substring(0, 20)} — ADDED TO CART`);
   }
 
@@ -45,7 +78,12 @@ export default function Home() {
           <div style={styles.headerRight}>
             <div style={styles.onlineDot} />
             <span style={styles.onlineText}>6 ONLINE</span>
-            <button style={styles.cartBtn}>
+            <Link href="/store" style={{ textDecoration: "none" }}>
+              <button style={styles.cartBtn}>
+                STORE
+              </button>
+            </Link>
+            <button style={styles.cartBtn} onClick={() => setIsOpen(true)}>
               CART{" "}
               <span style={{ color: "var(--fire)" }}>{cartCount}</span>
             </button>
@@ -77,38 +115,70 @@ export default function Home() {
             {/* Section label */}
             <p style={styles.sectionLabel}>◈ SELECT ARTEFACT</p>
 
-            {/* Product list */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
-              {products.map((p) => {
-                const isActive = selected.id === p.id;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => { setSelected(p); setQty(1); }}
-                    style={{
-                      ...styles.productCard,
-                      borderLeftColor: isActive ? "var(--fire)" : "rgba(212,168,83,0.15)",
-                      background: isActive
-                        ? "linear-gradient(100deg, rgba(255,107,26,0.08), rgba(8,6,18,0.9))"
-                        : "linear-gradient(100deg, rgba(5,4,12,0.95), rgba(8,6,18,0.9))",
-                      boxShadow: isActive ? "var(--glow-fire)" : "none",
-                    }}
-                  >
+            {/* Loading state */}
+            {loading && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} style={{ ...styles.productCard, opacity: 0.5, pointerEvents: "none" }}>
                     <div style={{ flex: 1 }}>
-                      <div style={styles.productName}>{p.name}</div>
-                      <div style={styles.productPrice}>{p.price}</div>
+                      <div style={{ height: 12, background: "rgba(212,168,83,0.1)", marginBottom: 6, width: "60%" }} />
+                      <div style={{ height: 12, background: "rgba(212,168,83,0.1)", width: "40%" }} />
                     </div>
-                    <span style={{
-                      ...styles.productTag,
-                      borderColor: isActive ? "rgba(255,107,26,0.4)" : "rgba(212,168,83,0.15)",
-                      color: isActive ? "var(--fire)" : "rgba(212,168,83,0.4)",
-                    }}>
-                      {p.tag}
-                    </span>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
+
+            {/* Error state */}
+            {error && (
+              <div style={{ padding: 12, border: "1px solid var(--red-live)", background: "rgba(204,17,17,0.1)", marginBottom: 24, textAlign: "center" }}>
+                <p style={{ color: "var(--red-live)", fontSize: "0.45rem", letterSpacing: "0.1em", marginBottom: 8 }}>{error}</p>
+                <button style={{ ...styles.btnGold, padding: "4px 8px", fontSize: "0.38rem" }} onClick={clearError}>DISMISS</button>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!loading && products.length === 0 && !error && (
+              <div style={{ padding: "24px 12px", border: "1px solid rgba(212,168,83,0.15)", marginBottom: 24, textAlign: "center" }}>
+                <span style={{ fontSize: "1.2rem", display: "block", marginBottom: 8 }}>𓂀</span>
+                <p style={{ fontSize: "0.42rem", letterSpacing: "0.1em", color: "rgba(212,168,83,0.4)" }}>ARCHIVE DEPLETED</p>
+              </div>
+            )}
+
+            {/* Product list */}
+            {!loading && products.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+                {products.map((p) => {
+                  const isActive = selected?._id === p._id;
+                  return (
+                    <div
+                      key={p._id}
+                      onClick={() => { setSelected(p); setQty(1); }}
+                      style={{
+                        ...styles.productCard,
+                        borderLeftColor: isActive ? "var(--fire)" : "rgba(212,168,83,0.15)",
+                        background: isActive
+                          ? "linear-gradient(100deg, rgba(255,107,26,0.08), rgba(8,6,18,0.9))"
+                          : "linear-gradient(100deg, rgba(5,4,12,0.95), rgba(8,6,18,0.9))",
+                        boxShadow: isActive ? "var(--glow-fire)" : "none",
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={styles.productName}>{p.name}</div>
+                        <div style={styles.productPrice}>{formatPrice(p.price)}</div>
+                      </div>
+                      <span style={{
+                        ...styles.productTag,
+                        borderColor: isActive ? "rgba(255,107,26,0.4)" : "rgba(212,168,83,0.15)",
+                        color: isActive ? "var(--fire)" : "rgba(212,168,83,0.4)",
+                      }}>
+                        {p.tags[0] || p.category}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <div style={styles.divider} />
 
@@ -123,27 +193,41 @@ export default function Home() {
             <div style={{ height: 16 }} />
 
             {/* ─── ADD TO CART ─── */}
-            <button style={styles.btnFire} onClick={handleAddToCart}>
-              ⚡ ADD TO CART
+            <button style={styles.btnFire} onClick={handleAddToCart} disabled={!selected || selected.stock === 0}>
+              {selected && selected.stock === 0 ? "— OUT OF STOCK —" : "⚡ ADD TO CART"}
             </button>
-            <button style={styles.btnGold}>
-              ♡ ADD TO WISHLIST
-            </button>
-            <button style={styles.btnCyan}>
-              ◈ AR TRY-ON
-            </button>
+            {selected && (
+              <Link href={`/store/${selected.slug}`} style={{ textDecoration: "none", width: "100%" }}>
+                <button style={styles.btnGold}>
+                  👁 VIEW DETAIL SPEC
+                </button>
+              </Link>
+            )}
           </aside>
 
           {/* ─── RIGHT 3D VIEWER ─── */}
           <div style={styles.viewerArea}>
-            <Viewer model={selected.model} accentColor={selected.accent} />
+            {selected && selected.modelPath ? (
+              <Viewer model={selected.modelPath} accentColor="var(--fire)" />
+            ) : selected ? (
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%", flexDirection: "column", gap: 12 }}>
+                <span style={{ fontSize: "3rem", animation: "eyeGlow 3.5s ease-in-out infinite" }}>𓂀</span>
+                <span style={{ fontFamily: "monospace", fontSize: "0.8rem", letterSpacing: "0.2em", color: "rgba(212, 168, 83, 0.4)" }}>3D MODEL UNAVAILABLE</span>
+              </div>
+            ) : (
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+                <span style={{ fontFamily: "monospace", fontSize: "0.8rem", letterSpacing: "0.2em", color: "rgba(212, 168, 83, 0.4)" }}>SELECT AN ARTEFACT</span>
+              </div>
+            )}
 
             {/* Floating product info */}
-            <div style={styles.floatingInfo}>
-              <span style={styles.floatingTag}>{selected.tag}</span>
-              <h3 style={styles.floatingName}>{selected.name}</h3>
-              <p style={styles.floatingPrice}>{selected.price}</p>
-            </div>
+            {selected && (
+              <div style={styles.floatingInfo}>
+                <span style={styles.floatingTag}>{selected.tags[0] || selected.category}</span>
+                <h3 style={styles.floatingName}>{selected.name}</h3>
+                <p style={styles.floatingPrice}>{formatPrice(selected.price)}</p>
+              </div>
+            )}
 
             {/* Bottom glyph strip */}
             <div style={styles.glyphStrip}>

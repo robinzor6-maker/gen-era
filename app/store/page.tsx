@@ -7,6 +7,7 @@ import ProductCard from '@/components/store/ProductCard';
 import CategoryFilter from '@/components/store/CategoryFilter';
 import SearchBar from '@/components/store/SearchBar';
 import Pagination from '@/components/store/Pagination';
+import { useCartStore } from '@/lib/store';
 
 export default function StorePage() {
   const {
@@ -19,6 +20,9 @@ export default function StorePage() {
     fetchFeatured,
     clearError,
   } = useProductStore();
+
+  const cartCount = useCartStore((s) => s.cartCount);
+  const setIsOpen = useCartStore((s) => s.setIsOpen);
 
   const [category, setCategory] = useState('');
   const [query, setQuery] = useState('');
@@ -94,6 +98,11 @@ export default function StorePage() {
             <h1 className="store-title font-display">THE SHOP</h1>
           </div>
           <SearchBar onSearch={handleSearch} />
+          <div className="store-header-actions">
+            <button className="btn-gold font-mono" style={{ fontSize: '0.75rem', padding: '6px 14px' }} onClick={() => setIsOpen(true)}>
+              CART <span style={{ color: 'var(--fire)' }}>{cartCount}</span>
+            </button>
+          </div>
         </div>
       </header>
 
