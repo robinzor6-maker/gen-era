@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import CartDrawer from "@/components/store/CartDrawer";
 import IntroSequence from "@/components/intro/IntroSequence";
+import TempleHomePage from "@/pages/TempleHomePage";
 import HomePage from "@/pages/HomePage";
 import StorePage from "@/pages/StorePage";
 import ProductDetailPage from "@/pages/ProductDetailPage";
@@ -29,7 +30,8 @@ function NotFound() {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={HomePage} />
+      <Route path="/" component={TempleHomePage} />
+      <Route path="/classic" component={HomePage} />
       <Route path="/store" component={StorePage} />
       <Route path="/store/:slug" component={ProductDetailPage} />
       <Route path="/checkout" component={CheckoutPage} />

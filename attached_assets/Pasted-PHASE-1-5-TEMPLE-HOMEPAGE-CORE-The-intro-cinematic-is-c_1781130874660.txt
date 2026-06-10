@@ -1,0 +1,164 @@
+PHASE 1.5 — TEMPLE HOMEPAGE CORE
+
+The intro cinematic is complete.
+
+Do NOT build Product Statues yet.
+
+First build the actual GEN ERA Temple Environment.
+
+Requirements:
+
+Create a production-grade Temple Homepage.
+
+Use existing Three.js / React Three Fiber architecture.
+
+================================================
+
+TEMPLE ENVIRONMENT
+
+================================================
+
+Build:
+
+* Massive Egyptian futuristic hall
+* Central Void Core portal
+* Dynamic lighting
+* Atmospheric fog
+* Floating particles
+* Reflective floor
+* Light shafts
+* Ambient energy effects
+
+================================================
+
+CAMERA SYSTEM
+
+================================================
+
+Implement:
+
+Desktop:
+
+* Mouse orbit
+* Zoom limits
+* Smooth damping
+
+Mobile:
+
+* Touch orbit
+* Pinch zoom
+
+Camera should feel premium and cinematic.
+
+================================================
+
+TEMPLE SECTIONS
+
+================================================
+
+Create placeholders for future systems:
+
+North Wing:
+Collections
+
+East Wing:
+Characters
+
+West Wing:
+Lore
+
+South Wing:
+Store Access
+
+Center:
+Void Core
+
+Do NOT implement their functionality yet.
+
+Only build the architecture and visual navigation system.
+
+================================================
+
+INTERACTIVE HOTSPOTS
+
+================================================
+
+Add clickable hotspots.
+
+When clicked:
+
+Open futuristic floating panels.
+
+Panels contain:
+
+* Section Name
+* Description
+* Future CTA
+
+No routing yet.
+
+Architecture only.
+
+================================================
+
+AMBIENT SYSTEM
+
+================================================
+
+Create AudioManager.
+
+Support:
+
+* Temple Ambient
+* Portal Hum
+* UI Sounds
+
+Volume Controls
+
+Mute Controls
+
+Global Context
+
+================================================
+
+PERFORMANCE
+
+================================================
+
+Target:
+
+60 FPS desktop
+
+30 FPS mobile
+
+Use:
+
+* Lazy loading
+* Memoization
+* Suspense
+* Texture optimization
+
+================================================
+
+OUTPUT
+
+================================================
+
+Generate:
+
+1. Temple Architecture Report
+2. Scene Hierarchy
+3. Performance Report
+4. Component Tree
+
+Then implement.
+
+Do not touch:
+
+* Store
+* Checkout
+* Orders
+* Auth
+* Wishlist
+
+Only build Temple Homepage Core.
