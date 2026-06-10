@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "GEN ERA"
+version = "1.0.0"
+id = "artifacts/gen-era"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18817
+
+[services.development]
+run = "pnpm --filter @workspace/gen-era run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gen-era", "run", "build" ]
+publicDir = "artifacts/gen-era/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18817"
+BASE_PATH = "/"
