@@ -1,6 +1,6 @@
 - [Expo dev proxy wrapper](expo-dev-proxy.md) — Metro startup too slow for workflow health check; fix: node wrapper opens port instantly, proxies to Metro on PORT+1, strips CORS origin header
 - [GEN ERA migration patterns](gen-era-migration.md) — Next.js→Vite: useRouter→useLocation/useParams (wouter), next/image→img, process.env→import.meta.env.VITE_*
 - [SearchBar infinite loop fix](searchbar-loop-fix.md) — useCallback(fn, [onSearch]) causes infinite loops when parent recreates handler; fix: useRef pattern
-- [API server DB migration](api-server-db.md) — Step 1 complete: all routes use Drizzle+PostgreSQL; tokens still in-memory Map (Step 2 = JWT); colors stored as JSON string in DB, parsed on read; product _id maps to DB UUID
+- [API server DB migration](api-server-db.md) — Step 1+2 complete: all routes use Drizzle+PostgreSQL; JWT access tokens (15m) + DB refresh tokens (7d) in sessions table; bcrypt cost 12; getUserFromToken decodes JWT
 - [Product type expansions](product-type-v2.md) — Product now has colors[], sizes[], comparePrice, collection, material, weight, shippingInfo, rating, reviewCount; CartItem has selectedSize/selectedColor
 - [Order stock deduction pattern](order-stock-deduction.md) — atomic: UPDATE products SET stock=stock-qty WHERE id=? AND stock>=qty RETURNING; 0 rows = 409; wrapped in db.transaction()

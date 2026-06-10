@@ -5,4 +5,5 @@ export {
   ordersTable,
   orderItemsTable,
   collectionsTable,
+  sessionsTable,
 } from "@workspace/db";

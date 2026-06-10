@@ -1,0 +1,349 @@
+تمام — هنبدأ **Step 2: Auth Hardening** بشكل احترافي “Production-grade” بدون ما نكسر أي حاجة في Step 1.
+
+أنا هديك هنا **تنفيذ فعلي + برومبت جاهز لـ Replit/Antigravity** + شكل النظام النهائي.
+
+---
+
+# 🔐 STEP 2 — AUTH HARDENING (GEN ERA)
+
+## 🎯 الهدف
+
+تحويل نظام الـ Auth من:
+
+* ❌ in-memory tokens
+* ❌ SHA-256 passwords
+* ❌ no expiry sessions
+
+إلى:
+
+* ✅ bcrypt passwords
+* ✅ JWT Access Token (15m)
+* ✅ Refresh Token (7 days DB stored)
+* ✅ Stateless API ready for scale
+
+---
+
+# 🧠 ARCHITECTURE النهائية
+
+```txt
+CLIENT
+  │
+  ├── login → accessToken (JWT 15m)
+  │
+  ├── requests → Authorization: Bearer JWT
+  │
+  ├── refresh → refreshToken (DB)
+  │
+  └── logout → delete refreshToken
+```
+
+---
+
+# 🧱 1. DATABASE ADDITION (IMPORTANT)
+
+## 📁 ملف جديد:
+
+`lib/db/src/schema/sessions.ts`
+
+```ts
+import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
+import { users } from "./users";
+
+export const sessions = pgTable("sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+  refreshToken: text("refresh_token").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+```
+
+---
+
+# 🔐 2. AUTH SERVICE (CORE LOGIC)
+
+## 📁 جديد:
+
+`artifacts/api-server/src/services/authService.ts`
+
+```ts
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import { db } from "@workspace/db";
+import { sessions } from "@workspace/db/schema/sessions";
+
+const JWT_SECRET = process.env.JWT_SECRET!;
+
+export class AuthService {
+  // HASH PASSWORD
+  static async hashPassword(password: string) {
+    return bcrypt.hash(password, 12);
+  }
+
+  // VERIFY PASSWORD
+  static async verifyPassword(password: string, hash: string) {
+    return bcrypt.compare(password, hash);
+  }
+
+  // CREATE ACCESS TOKEN
+  static createAccessToken(userId: string) {
+    return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "15m" });
+  }
+
+  // CREATE REFRESH TOKEN
+  static async createRefreshToken(userId: string) {
+    const token = crypto.randomBytes(40).toString("hex");
+
+    await db.insert(sessions).values({
+      userId,
+      refreshToken: token,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    return token;
+  }
+
+  // VERIFY REFRESH TOKEN
+  static async verifyRefreshToken(token: string) {
+    const session = await db.query.sessions.findFirst({
+      where: (s, { eq }) => eq(s.refreshToken, token),
+    });
+
+    if (!session) return null;
+    if (session.expiresAt < new Date()) return null;
+
+    return session.userId;
+  }
+
+  // DELETE SESSION (LOGOUT)
+  static async revokeRefreshToken(token: string) {
+    await db.delete(sessions).where((s, { eq }) => eq(s.refreshToken, token));
+  }
+}
+```
+
+---
+
+# 🔐 3. AUTH MIDDLEWARE (JWT VERIFY)
+
+## 📁 جديد:
+
+`middleware/auth.ts` (REWRITE)
+
+```ts
+import jwt from "jsonwebtoken";
+import { Request, Response, NextFunction } from "express";
+
+const JWT_SECRET = process.env.JWT_SECRET!;
+
+export interface AuthRequest extends Request {
+  user?: { userId: string };
+}
+
+export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
+  const header = req.headers.authorization;
+
+  if (!header?.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "No token" });
+  }
+
+  const token = header.split(" ")[1];
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    req.user = { userId: decoded.userId };
+    next();
+  } catch {
+    return res.status(401).json({ message: "Invalid token" });
+  }
+}
+```
+
+---
+
+# 🔁 4. AUTH ROUTES (LOGIN / REGISTER / REFRESH)
+
+## 📁 تعديل:
+
+`routes/auth.ts`
+
+### 🔥 REGISTER
+
+```ts
+const hash = await AuthService.hashPassword(password);
+
+const user = await db.insert(users).values({
+  email,
+  password: hash,
+  name,
+});
+```
+
+---
+
+### 🔥 LOGIN
+
+```ts
+const user = await db.query.users.findFirst({
+  where: (u, { eq }) => eq(u.email, email),
+});
+
+if (!user) return res.status(401);
+
+const valid = await AuthService.verifyPassword(password, user.password);
+
+if (!valid) return res.status(401);
+
+const accessToken = AuthService.createAccessToken(user.id);
+const refreshToken = await AuthService.createRefreshToken(user.id);
+
+res.json({
+  accessToken,
+  refreshToken,
+});
+```
+
+---
+
+### 🔁 REFRESH ENDPOINT (NEW)
+
+```ts
+router.post("/refresh", async (req, res) => {
+  const { refreshToken } = req.body;
+
+  const userId = await AuthService.verifyRefreshToken(refreshToken);
+
+  if (!userId) return res.status(401).json({ message: "Invalid refresh token" });
+
+  const newAccessToken = AuthService.createAccessToken(userId);
+
+  res.json({ accessToken: newAccessToken });
+});
+```
+
+---
+
+### 🚪 LOGOUT
+
+```ts
+router.post("/logout", async (req, res) => {
+  const { refreshToken } = req.body;
+
+  await AuthService.revokeRefreshToken(refreshToken);
+
+  res.json({ success: true });
+});
+```
+
+---
+
+# 🔐 5. ENV REQUIRED
+
+```env
+JWT_SECRET=super_long_random_secret_key_here
+```
+
+---
+
+# 🧠 IMPORTANT FIXES
+
+## ❌ Remove completely:
+
+* Map tokens (old system)
+* SHA-256 password logic
+* in-memory sessions
+
+---
+
+# ⚡ RESULT AFTER STEP 2
+
+## 🔐 Security
+
+* bcrypt passwords
+* JWT authentication
+* refresh rotation system
+* session revocation
+
+## 🚀 Performance
+
+* stateless API
+* scalable horizontally
+
+## 🏢 Production level
+
+* Shopify / Stripe style auth
+
+---
+
+# 🚀 COPY-PASTE MASTER PROMPT (REPLIT / ANTIGRAVITY)
+
+ده لو عايز تشغل AI يبني كل ده مرة واحدة:
+
+```text
+Upgrade the GEN ERA backend authentication system to production-grade architecture.
+
+Requirements:
+1. Replace SHA-256 password hashing with bcrypt (cost 12)
+2. Implement JWT access tokens (15 min expiry)
+3. Implement refresh token system stored in PostgreSQL using Drizzle
+4. Create sessions table:
+   - id (uuid)
+   - userId (uuid FK)
+   - refreshToken (text unique)
+   - expiresAt (timestamp)
+   - createdAt
+5. Create AuthService with:
+   - hashPassword
+   - verifyPassword
+   - createAccessToken
+   - createRefreshToken
+   - verifyRefreshToken
+   - revokeRefreshToken
+6. Rewrite auth middleware to validate JWT only
+7. Update auth routes:
+   - register → bcrypt hash
+   - login → returns access + refresh tokens
+   - refresh endpoint → issues new access token
+   - logout → deletes refresh token
+8. Remove all in-memory token storage completely
+9. Ensure no breaking changes in product or order APIs
+10. Keep TypeScript strict mode compatibility
+
+Goal: production-grade authentication system similar to Stripe/Shopify architecture.
+```
+
+---
+
+# 🧭 الخطوة اللي بعدها بعد Step 2
+
+بعد ما تخلص ده بنجاح:
+
+## 👉 Step 3:
+
+🔥 Orders Hardening
+
+* idempotency keys
+* payment flow (Stripe)
+* atomic stock locking fix
+* anti double-order protection
+
+---
+
+# ⚠️ أهم نقطة
+
+لو Step 2 اتعمل صح:
+
+> المشروع بقى **secure backend real system**
+
+لو اتعمل غلط:
+
+> كل المشروع ممكن يبقى vulnerable
+
+---
+
+لو جاهز نكمل:
+
+> "ابدأ Step 3"
+
+وأبني لك نظام الطلبات والدفع زي Shopify بالضبط 👌

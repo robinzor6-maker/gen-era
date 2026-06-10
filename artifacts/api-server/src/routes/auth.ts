@@ -1,20 +1,10 @@
 import { Router, Request, Response } from "express";
-import crypto from "crypto";
 import { eq } from "drizzle-orm";
+import { AuthService } from "../services/authService.js";
+import { authenticate, type AuthRequest } from "../middleware/auth.js";
 import { db, usersTable } from "../lib/db.js";
 
 const router = Router();
-
-// ─── In-memory token store (Step 2 will replace with JWT + DB sessions) ─────
-const tokens: Map<string, string> = new Map(); // token -> userId
-
-function hashPassword(password: string): string {
-  return crypto.createHash("sha256").update(password + "gen-era-salt").digest("hex");
-}
-
-function generateToken(): string {
-  return crypto.randomBytes(32).toString("hex");
-}
 
 type DbUser = typeof usersTable.$inferSelect;
 
@@ -30,21 +20,22 @@ function safeUser(user: DbUser) {
   };
 }
 
+// ── Shared helper: decode Bearer JWT → DB user (used by orders.ts) ─────────
 export async function getUserFromToken(req: Request): Promise<DbUser | null> {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith("Bearer ")) return null;
-  const token = auth.slice(7);
-  const userId = tokens.get(token);
-  if (!userId) return null;
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return null;
+  const token = header.slice(7);
+  const payload = AuthService.verifyAccessToken(token);
+  if (!payload) return null;
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.id, userId))
+    .where(eq(usersTable.id, payload.userId))
     .limit(1);
   return user ?? null;
 }
 
-// POST /api/v1/auth/register
+// ── POST /api/v1/auth/register ──────────────────────────────────────────────
 router.post("/register", async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
 
@@ -70,24 +61,26 @@ router.post("/register", async (req: Request, res: Response) => {
     return;
   }
 
+  const passwordHash = await AuthService.hashPassword(password);
+
   const [user] = await db
     .insert(usersTable)
-    .values({
-      name: name.trim(),
-      email: normalizedEmail,
-      passwordHash: hashPassword(password),
-      role: "user",
-      avatar: "",
-    })
+    .values({ name: name.trim(), email: normalizedEmail, passwordHash, role: "user", avatar: "" })
     .returning();
 
-  const token = generateToken();
-  tokens.set(token, user.id);
+  const accessToken  = AuthService.createAccessToken(user.id);
+  const refreshToken = await AuthService.createRefreshToken(user.id);
 
-  res.status(201).json({ success: true, token, user: safeUser(user) });
+  res.status(201).json({
+    success: true,
+    token: accessToken,
+    accessToken,
+    refreshToken,
+    user: safeUser(user),
+  });
 });
 
-// POST /api/v1/auth/login
+// ── POST /api/v1/auth/login ─────────────────────────────────────────────────
 router.post("/login", async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
@@ -103,25 +96,54 @@ router.post("/login", async (req: Request, res: Response) => {
     .where(eq(usersTable.email, normalizedEmail))
     .limit(1);
 
-  if (!user || user.passwordHash !== hashPassword(password)) {
+  if (!user || !(await AuthService.verifyPassword(password, user.passwordHash))) {
     res.status(401).json({ success: false, message: "Invalid email or password." });
     return;
   }
 
-  const token = generateToken();
-  tokens.set(token, user.id);
+  const accessToken  = AuthService.createAccessToken(user.id);
+  const refreshToken = await AuthService.createRefreshToken(user.id);
 
-  res.json({ success: true, token, user: safeUser(user) });
+  res.json({
+    success: true,
+    token: accessToken,
+    accessToken,
+    refreshToken,
+    user: safeUser(user),
+  });
 });
 
-// GET /api/v1/auth/profile
-router.get("/profile", async (req: Request, res: Response) => {
-  const user = await getUserFromToken(req);
-  if (!user) {
-    res.status(401).json({ success: false, message: "Unauthorized" });
+// ── POST /api/v1/auth/refresh ───────────────────────────────────────────────
+router.post("/refresh", async (req: Request, res: Response) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    res.status(400).json({ success: false, message: "Refresh token is required." });
     return;
   }
-  res.json({ success: true, data: safeUser(user) });
+
+  const userId = await AuthService.verifyRefreshToken(refreshToken);
+  if (!userId) {
+    res.status(401).json({ success: false, message: "Invalid or expired refresh token." });
+    return;
+  }
+
+  const accessToken = AuthService.createAccessToken(userId);
+  res.json({ success: true, accessToken, token: accessToken });
+});
+
+// ── POST /api/v1/auth/logout ────────────────────────────────────────────────
+router.post("/logout", async (req: Request, res: Response) => {
+  const { refreshToken } = req.body;
+  if (refreshToken) {
+    await AuthService.revokeRefreshToken(refreshToken);
+  }
+  res.json({ success: true, message: "Logged out." });
+});
+
+// ── GET /api/v1/auth/profile ────────────────────────────────────────────────
+router.get("/profile", authenticate, async (req: AuthRequest, res: Response) => {
+  res.json({ success: true, data: safeUser(req.user!) });
 });
 
 export default router;
