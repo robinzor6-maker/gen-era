@@ -74,24 +74,32 @@
 - ✅ `POST /api/v1/auth/login`
 - ✅ `GET  /api/v1/auth/profile`
 
+### Phase 2 — Completed (2026-06-10)
+- ✅ **DB schema** — Production-grade Drizzle schema: `users`, `collections`, `products`, `orders`, `order_items`, `wishlist_items` — UUIDs, indexes, soft deletes, Zod schemas exported
+- ✅ **Security hardening** — `helmet` (HTTP headers, CSP off for WebGL) + `express-rate-limit` (200/15min global, 20/15min auth) + body size limit (2MB)
+- ✅ **Store filter upgrade** — Collection chips with glyphs + product count, dual price range sliders, IN STOCK ONLY toggle, CLEAR FILTERS button; all wired to API params
+- ✅ **Products API filters** — `?minPrice`, `?maxPrice`, `?inStock` now implemented server-side
+- ✅ **Order types** — `OrderStatus` now includes `processing` + `cancelled`; `PaymentStatus` includes `failed`; `stripeSessionId` field added
+- ✅ **ProductFilters interface** — typed filter interface added to `types.ts`
+- ✅ **/account page** — 4-tab account center: Profile (identity record, stats), Orders (order history with status badges), Wishlist (count + link), Settings (password change, sign out)
+- ✅ **Documentation** — `ARCHITECTURE.md`, `API_REFERENCE.md`, `DATABASE.md`, `SECURITY.md`
+
 ---
 
 ## ⚠ Partially Completed
 
-- ⚠ **StorePage filter** — category filter works (Clothing / Accessories); no collection filter (Void Season I / Ankh Protocol / Nile Fire) yet
 - ⚠ **Product images / 3D models** — all product `image` fields are `""`, `gallery: []`, `modelPath: ""`; cards/detail show glyph placeholder (𓂀). ProductViewer and ProductGallery components exist but have no real assets to render
-- ⚠ **Auth persistence** — in-memory only; users/tokens reset on API server restart. PostgreSQL + Drizzle is in the stack but not yet wired up
-- ⚠ **CommunityPage** — renders the 3D temple scene only; no actual community content (feed, member leaderboard, comments, recent orders)
+- ⚠ **Auth persistence** — in-memory only; users/tokens reset on API server restart. DB schema is written and ready — just needs `DATABASE_URL` provisioned + migrations run
+- ⚠ **CommunityPage** — renders the 3D temple scene only; no actual community content
+- ⚠ **/account orders tab** — shows order history shell; but orders are in-memory and reset on restart (blocked by DB persistence)
 
 ---
 
 ## ❌ Missing / Not Started
 
-- ❌ **Payment gateway** — no Stripe / payment integration; orders are placed but no actual payment is collected
-- ❌ **Database persistence** — all data (products, orders, users) is in-memory and resets on server restart. DB schema exists (`packages/db`) but migration not run
+- ❌ **Payment gateway** — Stripe integration; orders are placed but no payment collected
+- ❌ **Database persistence** — `DATABASE_URL` not yet provisioned; all data resets on restart. Schema is fully written; just needs `pnpm --filter @workspace/db run push`
 - ❌ **Real product images** — product catalog needs image assets and 3D `.glb` model files
-- ❌ **Collection filter in StorePage** — `/api/v1/collections` exists; UI filter chip row not yet added to StorePage
-- ❌ **User dashboard** — no `/dashboard` page; no order history view for logged-in users
 - ❌ **Admin CMS** — no admin panel for managing products, orders, inventory
 - ❌ **Email notifications** — no order confirmation emails
 - ❌ **SEO / meta tags** — no `<head>` meta management (title, description, OG tags per page)
@@ -104,17 +112,15 @@
 ### 🔴 P0 — Critical (Core e-commerce loop)
 | # | Task | Why |
 |---|------|-----|
-| P0.1 | Add collection filter chips to StorePage | `/api/v1/collections` is ready; this is the last store UX gap |
+| P0.1 | Provision PostgreSQL + run migrations | `DATABASE_URL` needed; all data is in-memory. Schema is ready. |
 | P0.2 | Stripe payment integration | No revenue without payment; orders are currently unpaid COD-style |
-| P0.3 | Database persistence (Drizzle migrations) | All data resets on server restart; blocks production viability |
 
 ### 🟡 P1 — Important (Complete the vision)
 | # | Task | Why |
 |---|------|-----|
 | P1.1 | Real product images + thumbnails | Store shows placeholder glyphs; critical for credibility |
-| P1.2 | User dashboard + order history | Logged-in users can't see their past orders |
+| P1.2 | 3D GLB model files | ProductViewer is ready; need `.glb` assets |
 | P1.3 | Community Page content | Currently just renders the 3D scene; needs social layer |
-| P1.4 | 3D GLB model files | ProductViewer is ready; need `.glb` assets |
 
 ### 🟢 P2 — Enhancement (Polish & scale)
 | # | Task | Why |
@@ -129,11 +135,13 @@
 
 ## Next Logical Task
 
-**P0.1 — Collection filter in StorePage**
+**P0.1 — Provision PostgreSQL + run DB migrations**
 
-The API is already live. Add a second filter row of collection chips (VOID SEASON I · ANKH PROTOCOL · NILE FIRE · ALL) below the category filter. Wire to `?collection=` query param in the products API. Estimated: ~1 hour.
+1. Go to Replit → Database → provision a PostgreSQL database
+2. Copy the `DATABASE_URL` to Secrets
+3. Run: `pnpm --filter @workspace/db run push`
 
-Then immediately after: **P0.2 — Stripe payment**.
+Then immediately: **P0.2 — Stripe payment integration**.
 
 ---
 

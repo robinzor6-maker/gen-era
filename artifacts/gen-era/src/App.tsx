@@ -7,6 +7,7 @@ import CheckoutPage from "@/pages/CheckoutPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import WishlistPage from "@/pages/WishlistPage";
+import AccountPage from "@/pages/AccountPage";
 import CommunityPage from "@/pages/CommunityPage";
 import TemplePage from "@/pages/TemplePage";
 import LorePage from "@/pages/LorePage";
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/wishlist" component={WishlistPage} />
+      <Route path="/account" component={AccountPage} />
       <Route path="/community" component={CommunityPage} />
       <Route path="/temple" component={TemplePage} />
       <Route path="/lore" component={LorePage} />

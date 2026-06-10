@@ -62,6 +62,9 @@ export interface OrderCustomer {
   city: string;
 }
 
+export type OrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+export type PaymentStatus = 'unpaid' | 'paid' | 'refunded' | 'failed';
+
 export interface Order {
   _id: string;
   orderNumber: string;
@@ -71,11 +74,23 @@ export interface Order {
   items: OrderItem[];
   totalPrice: number;
   notes?: string;
-  status: 'pending' | 'paid' | 'shipped' | 'delivered';
-  paymentStatus: 'unpaid' | 'paid' | 'refunded';
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
   paymentRef?: string;
+  stripeSessionId?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProductFilters {
+  category?: string;
+  collection?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  q?: string;
+  page?: number;
+  limit?: number;
 }
 
 export interface Pagination {

@@ -1,0 +1,267 @@
+You are acting as a Senior Software Architect, Senior Full-Stack Engineer, DevOps Engineer, Security Engineer, Product Architect, Database Architect, and E-Commerce Platform Lead.
+
+Project:
+GEN ERA
+
+Current State:
+
+Frontend:
+- React
+- TypeScript
+- Zustand
+- Three.js
+- Temple Experience
+- AR Page
+- Lore System
+- Wishlist
+- Cart
+- Checkout
+
+Backend:
+- Express
+- TypeScript
+- Orders API
+- Auth API
+- Product API
+
+Existing Features:
+- Product Catalog
+- Product Details
+- Cart System
+- Wishlist System
+- Guest Checkout
+- Registered Checkout
+- Order Snapshots
+- Search
+- Temple Experience
+- AR Experience
+- Lore Experience
+
+DO NOT rewrite existing working systems.
+
+DO NOT break current functionality.
+
+DO NOT remove any existing feature.
+
+DO NOT refactor unrelated files.
+
+Your mission is to transform GEN ERA into a production-ready commerce platform.
+
+=================================================
+PHASE 2 OBJECTIVES
+=================================================
+
+1. DATABASE MIGRATION
+
+Replace temporary/in-memory storage with PostgreSQL.
+
+Create production-grade schemas for:
+
+Users
+Products
+Orders
+OrderItems
+Collections
+WishlistItems
+
+Requirements:
+
+- UUID primary keys
+- CreatedAt
+- UpdatedAt
+- Soft delete support
+- Proper indexing
+- Foreign keys
+- Constraints
+
+Generate migrations.
+
+=================================================
+
+2. STRIPE PAYMENT SYSTEM
+
+Implement Stripe Checkout.
+
+Requirements:
+
+- Payment Intent
+- Webhooks
+- Success page
+- Failed payment page
+- Refund-ready architecture
+- Metadata support
+
+Order Flow:
+
+Pending
+→ Paid
+→ Processing
+→ Shipped
+→ Delivered
+
+Never mark orders as paid before Stripe webhook confirmation.
+
+=================================================
+
+3. USER ACCOUNT CENTER
+
+Create:
+
+/account
+
+Sections:
+
+Profile
+Orders
+Wishlist
+Settings
+
+Orders page must show:
+
+Order Number
+Date
+Status
+Items
+Total
+Payment Status
+
+=================================================
+
+4. ORDER MANAGEMENT ARCHITECTURE
+
+Add:
+
+orderNumber
+customerType
+paymentStatus
+orderStatus
+
+Statuses:
+
+pending
+paid
+processing
+shipped
+delivered
+cancelled
+
+Build architecture for future admin dashboard.
+
+=================================================
+
+5. PRODUCT IMAGE SYSTEM
+
+Implement:
+
+Image Upload
+Image Optimization
+Image Storage
+
+Requirements:
+
+Multiple Images
+Thumbnail Generation
+Lazy Loading
+Responsive Images
+
+=================================================
+
+6. STORE FILTER UPGRADE
+
+Implement:
+
+Collection Filters
+Price Filters
+Availability Filters
+
+Requirements:
+
+Fast filtering
+Pagination support
+Search compatibility
+
+=================================================
+
+7. SECURITY HARDENING
+
+Audit:
+
+Authentication
+Authorization
+Orders
+Products
+Checkout
+
+Implement:
+
+Input Validation
+Rate Limiting
+Security Headers
+XSS Protection
+CSRF Strategy
+Sanitization
+
+=================================================
+
+8. PERFORMANCE OPTIMIZATION
+
+Audit:
+
+Rendering
+API Requests
+Images
+State Management
+
+Implement:
+
+Caching
+Lazy Loading
+Code Splitting
+Memoization
+
+=================================================
+
+9. DOCUMENTATION
+
+Generate:
+
+ARCHITECTURE.md
+DATABASE.md
+API_REFERENCE.md
+DEPLOYMENT.md
+SECURITY.md
+
+=================================================
+
+EXECUTION RULES
+
+Before changing code:
+
+1. Analyze existing architecture.
+2. Create implementation plan.
+3. Detect conflicts.
+4. Detect risks.
+
+Then:
+
+Implement step by step.
+
+After every step:
+
+- Explain what changed.
+- Explain why.
+- Verify TypeScript.
+- Verify build.
+- Verify functionality.
+
+Never make assumptions.
+
+Never remove working systems.
+
+Always preserve backward compatibility.
+
+Output:
+- Architecture Report
+- Migration Plan
+- Implementation Progress
+- Final Verification Report
