@@ -3,27 +3,28 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 
 /**
- * GEN ERA — Order Controller (Phase 1 Hardened)
+ * GEN ERA — Order Controller
  *
- * Security rules enforced:
- * - Authentication is mandatory on every route (enforced at router level via authenticate).
- * - req.user is always verified before any DB write.
- * - Price, name, image, sku are ALWAYS snapshotted from the live product at order time.
- * - Stock deduction is ATOMIC via findOneAndUpdate with $gte guard to prevent overselling
- *   under concurrent load (no check-then-act race condition).
- * - No guest users. No auto-registration. customerType is always "registered".
+ * Core principle: User account ≠ Order customer
+ *
+ * Two flows:
+ * 1. Registered: req.user exists → user = req.user._id, customerType = "registered"
+ * 2. Guest:      req.user is null → user = null, customerType = "guest"
+ *
+ * In BOTH flows:
+ * - customer object is ALWAYS saved on the order (self-contained receipt)
+ * - Price, name, image, sku are ALWAYS snapshotted from the live product
+ * - Stock deduction is ATOMIC via $gte + $inc (no race condition)
+ *
+ * ❌ No silent registration. No fake accounts. No forced login.
  */
 
 // ─── POST /api/v1/orders ───────────────────────────────────────────────────
+// Uses optionalAuth — req.user is either a User object or null.
 exports.createOrder = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ success: false, errors: errors.array() });
-  }
-
-  // Auth guard — belt-and-suspenders check (router-level authenticate already ran)
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: 'Login required to place orders' });
   }
 
   try {
@@ -51,8 +52,6 @@ exports.createOrder = async (req, res) => {
       }
 
       // ── 2. ATOMIC stock deduction — prevents overselling under concurrent load ─
-      // The $gte guard and $inc are a single atomic MongoDB operation.
-      // If stock < quantity, modifiedCount = 0 and the order is rejected.
       const stockResult = await Product.updateOne(
         { _id: item.productId, active: true, stock: { $gte: item.quantity } },
         { $inc: { stock: -item.quantity } }
@@ -78,14 +77,17 @@ exports.createOrder = async (req, res) => {
       totalPrice += product.price * item.quantity;
     }
 
-    // ── 4. Generate unique order number ──────────────────────────────────
+    // ── 4. Determine customer type ──────────────────────────────────────
+    const isRegistered = !!req.user;
+
+    // ── 5. Generate unique order number ──────────────────────────────────
     const orderNumber = `ORD-${Date.now()}`;
 
-    // ── 5. Persist order ─────────────────────────────────────────────────
+    // ── 6. Persist order ─────────────────────────────────────────────────
     const order = await Order.create({
       orderNumber,
-      user:         req.user._id,
-      customerType: 'registered',
+      user:         isRegistered ? req.user._id : null,
+      customerType: isRegistered ? 'registered' : 'guest',
       customer,
       items:        snapshotItems,
       totalPrice,
@@ -100,7 +102,7 @@ exports.createOrder = async (req, res) => {
 };
 
 // ─── GET /api/v1/orders/my ─────────────────────────────────────────────────
-// Returns paginated orders for the currently authenticated user.
+// Requires authentication (enforced at router level). Returns only the user's orders.
 exports.getMyOrders = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -131,7 +133,7 @@ exports.getMyOrders = async (req, res) => {
 };
 
 // ─── GET /api/v1/orders/:id ────────────────────────────────────────────────
-// Ownership enforced: user can only see their own order. Admins bypass this.
+// Requires authentication. Ownership enforced: user sees own orders, admin sees all.
 exports.getOrderById = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -140,7 +142,7 @@ exports.getOrderById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    if (req.user.role !== 'admin' && order.user.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && order.user?.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 

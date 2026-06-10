@@ -60,8 +60,8 @@ export interface OrderCustomer {
 export interface Order {
   _id: string;
   orderNumber: string;
-  user: string;
-  customerType: 'registered';
+  user: string | null;
+  customerType: 'guest' | 'registered';
   customer: OrderCustomer;
   items: OrderItem[];
   totalPrice: number;

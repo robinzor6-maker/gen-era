@@ -1,15 +1,21 @@
 const mongoose = require('mongoose');
 
 /**
- * GEN ERA — Order Model (Phase 1 Hardened)
+ * GEN ERA — Order Model
  *
  * Design rules:
- * - customerType is always "registered" — no guest orders.
+ * - customerType: "registered" (linked to User) or "guest" (no account).
+ * - user field is OPTIONAL — null for guest orders.
  * - orderNumber is generated server-side (ORD-<timestamp>), unique.
  * - items are SNAPSHOTS: name, price, image, sku captured at order creation time.
  *   They NEVER reference live product data after creation.
  * - customer object stores delivery details directly on the order (immutable record).
- * - shippingAddress has been replaced by the embedded customer object.
+ *   Present on BOTH guest and registered orders — the order is a self-contained receipt.
+ *
+ * Core principle: User account ≠ Order customer
+ *   - Order can exist without User (guest)
+ *   - User can exist without Order (browsing only)
+ *   - Both can be linked (registered user places order)
  */
 
 const orderItemSchema = new mongoose.Schema(
@@ -37,21 +43,20 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ─── Ownership ────────────────────────────────────────────────────────
+    // ─── Ownership (nullable for guest orders) ────────────────────────────
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,     // null = guest order
       index: true,
     },
     customerType: {
       type: String,
-      enum: ['registered'],
+      enum: ['guest', 'registered'],
       required: true,
-      default: 'registered',
     },
 
-    // ─── Delivery info (snapshot at order time) ───────────────────────────
+    // ─── Delivery info (always present — self-contained receipt) ──────────
     customer: {
       name:    { type: String, required: true },
       email:   { type: String, required: true },
@@ -99,6 +104,7 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index({ orderNumber: 1 }, { unique: true });
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index({ status: 1 });
-orderSchema.index({ paymentStatus: 1 });
+orderSchema.index({ customerType: 1 });
+orderSchema.index({ 'customer.email': 1 });
 
 module.exports = mongoose.model('Order', orderSchema);

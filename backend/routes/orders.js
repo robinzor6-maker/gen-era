@@ -3,6 +3,7 @@ const { body } = require('express-validator');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
 const authenticate = require('../middleware/auth');
+const optionalAuth = require('../middleware/optionalAuth');
 const authorize = require('../middleware/authorize');
 
 // ─── Validation rules ──────────────────────────────────────────────────────
@@ -18,7 +19,7 @@ const createOrderRules = [
     .isInt({ min: 1 })
     .withMessage('Quantity must be at least 1'),
 
-  // Customer object validation
+  // Customer object validation (required for BOTH guest and registered)
   body('customer.name')
     .trim()
     .notEmpty()
@@ -49,15 +50,14 @@ const statusRules = [
     .withMessage('Invalid order status'),
 ];
 
-// ─── All order routes require authentication ───────────────────────────────
-router.use(authenticate);
+// ─── Guest-friendly route (optionalAuth: sets req.user if token present, null otherwise) ─
+router.post('/', optionalAuth, createOrderRules, orderController.createOrder);
 
-// ─── User routes ───────────────────────────────────────────────────────────
-router.post('/',    createOrderRules, orderController.createOrder);
-router.get('/my',                    orderController.getMyOrders);
-router.get('/:id',                   orderController.getOrderById);
+// ─── Authenticated routes (require login) ──────────────────────────────────
+router.get('/my',  authenticate,                    orderController.getMyOrders);
+router.get('/:id', authenticate,                    orderController.getOrderById);
 
 // ─── Admin routes ──────────────────────────────────────────────────────────
-router.put('/:id/status', authorize('admin'), statusRules, orderController.updateOrderStatus);
+router.put('/:id/status', authenticate, authorize('admin'), statusRules, orderController.updateOrderStatus);
 
 module.exports = router;

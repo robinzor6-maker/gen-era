@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/lib/store';
 import { useAuth } from '@/lib/hooks';
 import { api } from '@/lib/api';
@@ -12,8 +11,17 @@ function formatPrice(price: number): string {
   return price.toLocaleString('ar-EG') + ' ج.م';
 }
 
+/**
+ * GEN ERA — Checkout Page
+ *
+ * Supports TWO flows:
+ * 1. Registered user (logged in): order.user = userId, customerType = "registered"
+ * 2. Guest (not logged in): order.user = null, customerType = "guest"
+ *
+ * In BOTH flows: the customer object is always submitted.
+ * ❌ No silent registration. ❌ No fake accounts. ❌ No forced login.
+ */
 export default function CheckoutPage() {
-  const router = useRouter();
   const { items, cartTotal, clearCart } = useCartStore();
   const { isAuthenticated, user } = useAuth();
 
@@ -36,7 +44,7 @@ export default function CheckoutPage() {
     setMounted(true);
   }, []);
 
-  // Pre-fill from authenticated user data
+  // Pre-fill from authenticated user data (if logged in)
   useEffect(() => {
     if (user) {
       setFullName(user.name  || '');
@@ -44,16 +52,8 @@ export default function CheckoutPage() {
     }
   }, [user]);
 
-  // ── Auth guard ────────────────────────────────────────────────────────────
-  // Must be logged in to checkout. Redirect to login preserving intent.
-  useEffect(() => {
-    if (mounted && !isAuthenticated) {
-      router.replace('/login?redirect=/checkout');
-    }
-  }, [mounted, isAuthenticated, router]);
-
-  // Prevent flash of checkout form before auth check resolves
-  if (!mounted || !isAuthenticated) return null;
+  // Don't render until hydrated (prevents mismatch)
+  if (!mounted) return null;
 
   // ── Form Submit ───────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,6 +72,7 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (loading) return; // prevent double-submit
     setLoading(true);
 
     try {
@@ -132,6 +133,7 @@ export default function CheckoutPage() {
             <div><strong style={{ color: 'var(--sand)' }}>ACQUISITOR:</strong> {successOrder.customer?.name}</div>
             <div><strong style={{ color: 'var(--sand)' }}>DESTINATION:</strong> {successOrder.customer?.address}, {successOrder.customer?.city}</div>
             <div><strong style={{ color: 'var(--sand)' }}>TOTAL COST:</strong> {formatPrice(successOrder.totalPrice)}</div>
+            <div><strong style={{ color: 'var(--sand)' }}>TYPE:</strong> <span className="status-in-stock">{successOrder.customerType.toUpperCase()}</span></div>
             <div><strong style={{ color: 'var(--sand)' }}>STATUS:</strong> <span className="status-in-stock">{successOrder.status.toUpperCase()}</span></div>
             {successOrder.notes && (
               <div><strong style={{ color: 'var(--sand)' }}>NOTES:</strong> {successOrder.notes}</div>
@@ -139,7 +141,9 @@ export default function CheckoutPage() {
           </div>
 
           <p className="text-muted font-trirong" style={{ fontSize: '0.9rem', marginBottom: '30px' }}>
-            The scribes have recorded your transaction in the archive. Your artifact will be dispatched shortly.
+            {successOrder.customerType === 'registered'
+              ? 'Your order is linked to your account. View it anytime from your profile.'
+              : 'Your order has been recorded. Save your order number for reference.'}
           </p>
 
           <Link href="/store" className="btn-fire" style={{ padding: '12px 28px', textDecoration: 'none', display: 'inline-block' }}>
@@ -177,7 +181,7 @@ export default function CheckoutPage() {
         <div className="detail-container checkout-grid">
           {/* Left Column — Checkout Form */}
           <div className="detail-visual-col">
-            <form onSubmit={handleSubmit} className="visual-panel checkout-form-panel" style={{ padding: '30px', gap: '20px' }}>
+            <form id="checkout-form" onSubmit={handleSubmit} className="visual-panel checkout-form-panel" style={{ padding: '30px', gap: '20px' }}>
               <span className="corner-mark tl" aria-hidden="true" />
               <span className="corner-mark tr" aria-hidden="true" />
               <span className="corner-mark bl" aria-hidden="true" />
@@ -186,6 +190,17 @@ export default function CheckoutPage() {
               <h2 className="font-cinzel form-title" style={{ fontSize: '1.2rem', letterSpacing: '0.15em', marginBottom: '10px', color: '#fff' }}>
                 SHIPPING SPECIFICATION
               </h2>
+
+              {/* Guest/Registered indicator */}
+              {isAuthenticated ? (
+                <div className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--green-neon)', background: 'rgba(0,255,136,0.05)', border: '1px solid rgba(0,255,136,0.15)', padding: '8px 12px', borderRadius: '4px' }}>
+                  ✓ LOGGED IN AS {user?.name?.toUpperCase()} — ORDER WILL BE LINKED TO YOUR ACCOUNT
+                </div>
+              ) : (
+                <div className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--sand2)', background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.15)', padding: '8px 12px', borderRadius: '4px' }}>
+                  𓂀 GUEST CHECKOUT — NO ACCOUNT REQUIRED. <Link href="/login" style={{ color: 'var(--sand)', textDecoration: 'underline', textUnderlineOffset: '3px' }}>LOGIN</Link> TO TRACK ORDERS.
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="font-mono label-input">FULL NAME</label>
@@ -314,7 +329,6 @@ export default function CheckoutPage() {
                 <button
                   type="submit"
                   form="checkout-form"
-                  onClick={handleSubmit}
                   className="btn-fire checkout-submit-btn"
                   style={{ width: '100%', padding: '18px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
                   disabled={loading}
