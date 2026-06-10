@@ -2,47 +2,66 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/lib/store';
 import { useAuth } from '@/lib/hooks';
 import { api } from '@/lib/api';
-import { OrderResponse } from '@/lib/types';
+import { Order, OrderResponse } from '@/lib/types';
 
 function formatPrice(price: number): string {
   return price.toLocaleString('ar-EG') + ' ج.م';
 }
 
 export default function CheckoutPage() {
+  const router = useRouter();
   const { items, cartTotal, clearCart } = useCartStore();
-  const { isAuthenticated, login, register } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   // Form State
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [notes, setNotes] = useState('');
+  const [email,    setEmail]    = useState('');
+  const [phone,    setPhone]    = useState('');
+  const [address,  setAddress]  = useState('');
+  const [city,     setCity]     = useState('');
+  const [notes,    setNotes]    = useState('');
 
-  // UI / Logic States
+  // UI States
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successOrder, setSuccessOrder] = useState<any | null>(null);
-
-  const [mounted, setMounted] = useState(false);
+  const [loading,         setLoading]         = useState(false);
+  const [error,           setError]           = useState<string | null>(null);
+  const [successOrder,    setSuccessOrder]    = useState<Order | null>(null);
+  const [mounted,         setMounted]         = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  if (!mounted) return null;
+  // Pre-fill from authenticated user data
+  useEffect(() => {
+    if (user) {
+      setFullName(user.name  || '');
+      setEmail(user.email || '');
+    }
+  }, [user]);
 
+  // ── Auth guard ────────────────────────────────────────────────────────────
+  // Must be logged in to checkout. Redirect to login preserving intent.
+  useEffect(() => {
+    if (mounted && !isAuthenticated) {
+      router.replace('/login?redirect=/checkout');
+    }
+  }, [mounted, isAuthenticated, router]);
+
+  // Prevent flash of checkout form before auth check resolves
+  if (!mounted || !isAuthenticated) return null;
+
+  // ── Form Submit ───────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
     setError(null);
 
-    // 1. Validation
+    // Client-side validation
     if (!fullName.trim() || !email.trim() || !phone.trim() || !address.trim() || !city.trim()) {
       setValidationError('All fields except notes are required.');
       return;
@@ -56,35 +75,19 @@ export default function CheckoutPage() {
     setLoading(true);
 
     try {
-      // 2. Ensure authentication (silent guest login or registration if not authenticated)
-      if (!isAuthenticated) {
-        const guestPassword = 'guestpassword123';
-        try {
-          // Attempt registering the user
-          await register(fullName.trim(), email.trim().toLowerCase(), guestPassword);
-        } catch (regErr) {
-          // If already registered, attempt logging in with the default guest password
-          try {
-            await login(email.trim().toLowerCase(), guestPassword);
-          } catch (loginErr) {
-            throw new Error('This email is already registered. Please login or use a different email.');
-          }
-        }
-      }
-
-      // 3. Construct payload and send to backend
       const payload = {
+        customer: {
+          name:    fullName.trim(),
+          email:   email.trim().toLowerCase(),
+          phone:   phone.trim(),
+          address: address.trim(),
+          city:    city.trim(),
+        },
         items: items.map((i) => ({
           productId: i.productId,
-          quantity: i.quantity,
+          quantity:  i.quantity,
         })),
-        shippingAddress: {
-          name: fullName.trim(),
-          street: address.trim(),
-          city: city.trim(),
-          country: 'Egypt',
-          phone: phone.trim(),
-        },
+        notes: notes.trim(),
       };
 
       const res = await api.post<OrderResponse>('/orders', payload);
@@ -102,15 +105,13 @@ export default function CheckoutPage() {
     }
   };
 
-  // Success Confirmation Screen
+  // ── Success Screen ────────────────────────────────────────────────────────
   if (successOrder) {
     return (
       <main className="product-detail-page success-page animate-fade-up" style={{ paddingBottom: '120px' }}>
         <header className="store-header">
           <div className="store-header-inner">
-            <Link href="/" className="back-link font-mono">
-              ← TEMPLE
-            </Link>
+            <Link href="/" className="back-link font-mono">← TEMPLE</Link>
             <div className="store-title-wrap">
               <span className="label store-eyebrow">GEN ERA — TRANSACTION COMPLETE</span>
               <h1 className="store-title font-display">SUCCESS</h1>
@@ -120,20 +121,21 @@ export default function CheckoutPage() {
         </header>
 
         <div className="store-empty" style={{ margin: '80px auto', maxWidth: '580px', padding: '40px', border: '1px solid var(--border-gold)', background: 'linear-gradient(135deg, rgba(8,6,18,0.95), rgba(4,3,10,0.98))', position: 'relative' }}>
-          <span className="corner-mark tl" />
-          <span className="corner-mark tr" />
-          <span className="corner-mark bl" />
-          <span className="corner-mark br" />
+          <span className="corner-mark tl" /><span className="corner-mark tr" />
+          <span className="corner-mark bl" /><span className="corner-mark br" />
 
           <span className="empty-glyph font-display" style={{ animation: 'eyeGlow 3.5s ease-in-out infinite', color: 'var(--green-neon)', textShadow: '0 0 10px rgba(0, 255, 136, 0.3)' }}>𓋹</span>
           <h2 className="font-cinzel" style={{ color: 'var(--green-neon)', letterSpacing: '0.1em' }}>ORDER RECORDED</h2>
-          
+
           <div className="font-mono text-muted" style={{ margin: '20px 0', fontSize: '0.85rem', lineHeight: '1.8', textAlign: 'left', borderTop: '1px solid var(--border-thin)', borderBottom: '1px solid var(--border-thin)', padding: '16px 0' }}>
-            <div><strong style={{ color: 'var(--sand)' }}>ORDER ID:</strong> #{successOrder._id}</div>
-            <div><strong style={{ color: 'var(--sand)' }}>ACQUISITOR:</strong> {successOrder.shippingAddress?.name}</div>
-            <div><strong style={{ color: 'var(--sand)' }}>DESTINATION:</strong> {successOrder.shippingAddress?.street}, {successOrder.shippingAddress?.city}</div>
+            <div><strong style={{ color: 'var(--sand)' }}>ORDER №:</strong> {successOrder.orderNumber}</div>
+            <div><strong style={{ color: 'var(--sand)' }}>ACQUISITOR:</strong> {successOrder.customer?.name}</div>
+            <div><strong style={{ color: 'var(--sand)' }}>DESTINATION:</strong> {successOrder.customer?.address}, {successOrder.customer?.city}</div>
             <div><strong style={{ color: 'var(--sand)' }}>TOTAL COST:</strong> {formatPrice(successOrder.totalPrice)}</div>
             <div><strong style={{ color: 'var(--sand)' }}>STATUS:</strong> <span className="status-in-stock">{successOrder.status.toUpperCase()}</span></div>
+            {successOrder.notes && (
+              <div><strong style={{ color: 'var(--sand)' }}>NOTES:</strong> {successOrder.notes}</div>
+            )}
           </div>
 
           <p className="text-muted font-trirong" style={{ fontSize: '0.9rem', marginBottom: '30px' }}>
@@ -148,13 +150,12 @@ export default function CheckoutPage() {
     );
   }
 
+  // ── Checkout Form ─────────────────────────────────────────────────────────
   return (
     <main className="product-detail-page checkout-route-page animate-fade-up">
       <header className="store-header">
         <div className="store-header-inner">
-          <Link href="/store" className="back-link font-mono">
-            ← BACK TO ARCHIVE
-          </Link>
+          <Link href="/store" className="back-link font-mono">← BACK TO ARCHIVE</Link>
           <div className="store-title-wrap">
             <span className="label store-eyebrow">GEN ERA — ACQUISITION PROTOCOL</span>
             <h1 className="store-title font-display">CHECKOUT</h1>
@@ -263,7 +264,6 @@ export default function CheckoutPage() {
               {validationError && (
                 <div className="validation-error font-mono">{validationError}</div>
               )}
-
               {error && (
                 <div className="validation-error font-mono" style={{ borderColor: 'var(--red-live)', color: 'var(--red-live)', background: 'rgba(204,17,17,0.05)' }}>
                   {error}
@@ -313,6 +313,7 @@ export default function CheckoutPage() {
 
                 <button
                   type="submit"
+                  form="checkout-form"
                   onClick={handleSubmit}
                   className="btn-fire checkout-submit-btn"
                   style={{ width: '100%', padding: '18px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}

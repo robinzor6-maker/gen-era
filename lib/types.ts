@@ -49,21 +49,24 @@ export interface OrderItem {
   quantity: number;
 }
 
-export interface ShippingAddress {
-  name?: string;
-  street: string;
-  city: string;
-  country: string;
+export interface OrderCustomer {
+  name: string;
+  email: string;
   phone?: string;
+  address: string;
+  city: string;
 }
 
 export interface Order {
   _id: string;
+  orderNumber: string;
   user: string;
+  customerType: 'registered';
+  customer: OrderCustomer;
   items: OrderItem[];
   totalPrice: number;
-  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
-  shippingAddress: ShippingAddress;
+  notes?: string;
+  status: 'pending' | 'paid' | 'shipped' | 'delivered';
   paymentStatus: 'unpaid' | 'paid' | 'refunded';
   paymentRef?: string;
   createdAt: string;

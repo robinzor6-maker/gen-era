@@ -6,19 +6,46 @@ const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/authorize');
 
 // ─── Validation rules ──────────────────────────────────────────────────────
+
 const createOrderRules = [
-  body('items').isArray({ min: 1 }).withMessage('Order must contain at least one item'),
-  body('items.*.productId').notEmpty().withMessage('Each item must have a productId'),
-  body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('shippingAddress.name').optional().trim(),
-  body('shippingAddress.street').notEmpty().withMessage('Street address is required'),
-  body('shippingAddress.city').notEmpty().withMessage('City is required'),
-  body('shippingAddress.country').notEmpty().withMessage('Country is required'),
+  body('items')
+    .isArray({ min: 1 })
+    .withMessage('Order must contain at least one item'),
+  body('items.*.productId')
+    .notEmpty()
+    .withMessage('Each item must have a productId'),
+  body('items.*.quantity')
+    .isInt({ min: 1 })
+    .withMessage('Quantity must be at least 1'),
+
+  // Customer object validation
+  body('customer.name')
+    .trim()
+    .notEmpty()
+    .withMessage('Customer name is required'),
+  body('customer.email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid customer email is required'),
+  body('customer.address')
+    .trim()
+    .notEmpty()
+    .withMessage('Delivery address is required'),
+  body('customer.city')
+    .trim()
+    .notEmpty()
+    .withMessage('City is required'),
+  body('customer.phone')
+    .optional()
+    .trim(),
+  body('notes')
+    .optional()
+    .trim(),
 ];
 
 const statusRules = [
   body('status')
-    .isIn(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'])
+    .isIn(['pending', 'paid', 'shipped', 'delivered'])
     .withMessage('Invalid order status'),
 ];
 
@@ -28,7 +55,7 @@ router.use(authenticate);
 // ─── User routes ───────────────────────────────────────────────────────────
 router.post('/',    createOrderRules, orderController.createOrder);
 router.get('/my',                    orderController.getMyOrders);
-router.get('/:id',                   orderController.getOrderById);  // ownership enforced in controller
+router.get('/:id',                   orderController.getOrderById);
 
 // ─── Admin routes ──────────────────────────────────────────────────────────
 router.put('/:id/status', authorize('admin'), statusRules, orderController.updateOrderStatus);

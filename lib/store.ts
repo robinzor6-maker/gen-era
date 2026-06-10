@@ -89,7 +89,11 @@ export const useCartStore = create<CartStore>()(
 );
 
 /**
- * GEN ERA — Auth + Scene Store (unchanged global store)
+ * GEN ERA — Auth + Scene Store
+ *
+ * persist() with partialize ensures only user + token survive page refresh.
+ * Scene state (currentScene, cameraPosition, hudOpen, sceneLoaded) is
+ * intentionally ephemeral — reset on each visit.
  */
 interface AppStore {
   user: User | null;
@@ -107,26 +111,37 @@ interface AppStore {
   setSceneLoaded: (loaded: boolean) => void;
 }
 
-export const useStore = create<AppStore>((set) => ({
-  user: null,
-  token: null,
-  setUser: (user) => set({ user }),
-  setToken: (token) => set({ token }),
-  logout: () => {
-    set({ user: null, token: null });
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('genEraToken');
+export const useStore = create<AppStore>()(
+  persist(
+    (set) => ({
+      // ─── Auth state ───────────────────────────────────────────────────
+      user: null,
+      token: null,
+      setUser: (user) => set({ user }),
+      setToken: (token) => set({ token }),
+      logout: () => {
+        set({ user: null, token: null });
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('genEraToken');
+        }
+      },
+      // ─── Scene state (not persisted — ephemeral) ──────────────────────
+      currentScene: 'main',
+      cameraPosition: [0, 4, 14],
+      setCurrentScene: (scene) => set({ currentScene: scene }),
+      setCameraPosition: (pos) => set({ cameraPosition: pos }),
+      hudOpen: false,
+      setHudOpen: (open) => set({ hudOpen: open }),
+      sceneLoaded: false,
+      setSceneLoaded: (loaded) => set({ sceneLoaded: loaded }),
+    }),
+    {
+      name: 'gen-era-auth',
+      // Only persist auth fields — scene state resets on every visit
+      partialize: (state) => ({ user: state.user, token: state.token }),
     }
-  },
-  currentScene: 'main',
-  cameraPosition: [0, 4, 14],
-  setCurrentScene: (scene) => set({ currentScene: scene }),
-  setCameraPosition: (pos) => set({ cameraPosition: pos }),
-  hudOpen: false,
-  setHudOpen: (open) => set({ hudOpen: open }),
-  sceneLoaded: false,
-  setSceneLoaded: (loaded) => set({ sceneLoaded: loaded }),
-}));
+  )
+);
 
 // Re-export for backward compatibility with hooks.ts
 export type StoreState = AppStore;

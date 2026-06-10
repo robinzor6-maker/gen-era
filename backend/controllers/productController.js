@@ -19,7 +19,7 @@ const generateSlug = (name) =>
  */
 
 // ─── GET /api/v1/products ───────────────────────────────────────────────────
-// Paginated, filterable by category / featured / sort / order
+// Paginated, filterable by category / featured / sort / order / q (search)
 exports.getAllProducts = async (req, res) => {
   try {
     const {
@@ -29,6 +29,7 @@ exports.getAllProducts = async (req, res) => {
       featured,
       sort = 'createdAt',
       order = 'desc',
+      q,
     } = req.query;
 
     const pageNum = Math.max(1, parseInt(page, 10));
@@ -38,6 +39,16 @@ exports.getAllProducts = async (req, res) => {
     const filter = { active: true };
     if (category) filter.category = category;
     if (featured !== undefined) filter.featured = featured === 'true';
+
+    // ── Inline search: regex across name, description, tags ───────────────
+    if (q && q.trim().length > 0) {
+      const pattern = new RegExp(q.trim(), 'i');
+      filter.$or = [
+        { name: pattern },
+        { description: pattern },
+        { tags: { $in: [pattern] } },
+      ];
+    }
 
     const sortObj = { [sort]: order === 'asc' ? 1 : -1 };
 
