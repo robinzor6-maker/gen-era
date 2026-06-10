@@ -48,8 +48,25 @@ function formatOrder(
 
 // POST /api/v1/orders  (guest or registered)
 router.post("/", async (req: Request, res: Response) => {
-  const { customer, items, notes } = req.body;
+  const { customer, items, notes, idempotencyKey } = req.body;
   const authUser = await getUserFromToken(req);
+
+  // ── Idempotency check — return existing order on duplicate request ─────
+  if (idempotencyKey) {
+    const [existing] = await db
+      .select()
+      .from(ordersTable)
+      .where(eq(ordersTable.idempotencyKey, idempotencyKey))
+      .limit(1);
+    if (existing) {
+      const existingItems = await db
+        .select()
+        .from(orderItemsTable)
+        .where(eq(orderItemsTable.orderId, existing.id));
+      res.status(200).json({ success: true, data: formatOrder(existing, existingItems), duplicate: true });
+      return;
+    }
+  }
 
   if (
     !customer?.name?.trim() ||
@@ -157,6 +174,7 @@ router.post("/", async (req: Request, res: Response) => {
           notes: notes?.trim() ?? "",
           orderStatus: "pending",
           paymentStatus: "unpaid",
+          idempotencyKey: idempotencyKey ?? null,
         })
         .returning();
 

@@ -21,6 +21,7 @@ export const ordersTable = pgTable("orders", {
   paymentStatus: text("payment_status", {
     enum: ["unpaid", "paid", "refunded", "failed"],
   }).notNull().default("unpaid"),
+  idempotencyKey: text("idempotency_key").unique(),
   paymentRef:    text("payment_ref"),
   stripeSessionId: text("stripe_session_id"),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
