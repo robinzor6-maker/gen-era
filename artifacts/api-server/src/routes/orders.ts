@@ -3,6 +3,26 @@ import { getUserFromToken } from "./auth";
 
 const router = Router();
 
+// ─── Import product catalog for price validation ──────────────────────────
+// We import at runtime to avoid circular dependencies
+let _products: Array<{ _id: string; slug: string; name: string; price: number; image: string; stock: number }> = [];
+
+async function getProducts() {
+  if (_products.length === 0) {
+    // Dynamic import to get the products list from the products route module
+    // For now we replicate the seed data to avoid circular imports
+    _products = [
+      { _id: "prod_001", slug: "pharaoh-cyber-hoodie", name: "PHARAOH CYBER HOODIE", price: 2800, image: "", stock: 15 },
+      { _id: "prod_002", slug: "void-eye-pendant", name: "VOID EYE PENDANT", price: 950, image: "", stock: 42 },
+      { _id: "prod_003", slug: "obsidian-cargo-pants", name: "OBSIDIAN CARGO PANTS", price: 1800, image: "", stock: 8 },
+      { _id: "prod_004", slug: "desert-storm-cap", name: "DESERT STORM CAP", price: 650, image: "", stock: 30 },
+      { _id: "prod_005", slug: "nile-fire-jacket", name: "NILE FIRE JACKET", price: 3200, image: "", stock: 5 },
+      { _id: "prod_006", slug: "ankh-chain-bracelet", name: "ANKH CHAIN BRACELET", price: 480, image: "", stock: 0 },
+    ];
+  }
+  return _products;
+}
+
 // ─── In-memory order store ────────────────────────────────────────────────
 interface OrderItem {
   productId: string;
@@ -43,7 +63,7 @@ function generateOrderNumber(): string {
 }
 
 // POST /api/v1/orders  (guest or registered)
-router.post("/", (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   const { customer, items, notes } = req.body;
   const user = getUserFromToken(req);
 
@@ -58,19 +78,28 @@ router.post("/", (req: Request, res: Response) => {
     return;
   }
 
-  // Calculate total from submitted items (in production you'd verify against DB prices)
-  const resolvedItems: OrderItem[] = items.map((item: { productId: string; quantity: number }) => ({
-    productId: item.productId,
-    name: `Product ${item.productId}`,
-    price: 0, // Would look up from DB in production
-    image: "",
-    sku: item.productId,
-    quantity: item.quantity,
-  }));
+  // Resolve prices from authoritative product catalog — never trust client-submitted prices
+  const catalog = await getProducts();
+  const resolvedItems: OrderItem[] = [];
 
-  // In a real app: look up actual prices. For now accept any submitted total.
-  // We compute a rough total based on what we know.
-  const totalPrice = resolvedItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+  for (const item of items as Array<{ productId: string; quantity: number }>) {
+    const product = catalog.find((p) => p._id === item.productId);
+    if (!product) {
+      res.status(400).json({ success: false, message: `Product not found: ${item.productId}` });
+      return;
+    }
+    resolvedItems.push({
+      productId: product._id,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+      sku: product.slug,
+      quantity: Math.max(1, item.quantity),
+    });
+  }
+
+  // Compute authoritative total from server-side prices
+  const totalPrice = resolvedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
   const order: Order = {
     _id: `order_${Date.now()}`,
