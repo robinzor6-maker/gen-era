@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import CartDrawer from "@/components/store/CartDrawer";
+import IntroSequence from "@/components/intro/IntroSequence";
 import HomePage from "@/pages/HomePage";
 import StorePage from "@/pages/StorePage";
 import ProductDetailPage from "@/pages/ProductDetailPage";
@@ -45,8 +47,14 @@ function Router() {
 }
 
 function App() {
+  const alreadySeen = sessionStorage.getItem("gen-era-intro-seen") === "1";
+  const [introVisible, setIntroVisible] = useState(!alreadySeen);
+
   return (
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+      {introVisible && (
+        <IntroSequence onComplete={() => setIntroVisible(false)} />
+      )}
       <Router />
       <CartDrawer />
     </WouterRouter>
