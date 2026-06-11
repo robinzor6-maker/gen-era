@@ -1,0 +1,325 @@
+تمام — هنبدأ **STEP 6: ADMIN FOUNDATION (لوحة التحكم الاحترافية)**
+وده أهم تحول في المشروع لأنه بيحوّل GEN ERA من “Store” إلى:
+
+> 🧠 **E-commerce Operating System (زي Shopify Admin Panel)**
+
+---
+
+# 🚀 STEP 6 — ADMIN SYSTEM FOUNDATION
+
+## 🎯 الهدف
+
+بناء لوحة تحكم كاملة لإدارة:
+
+### ✔ Products
+
+* إضافة / تعديل / حذف
+* رفع صور
+* التحكم في stock
+* تفعيل featured
+
+### ✔ Orders
+
+* تغيير status (pending → paid → shipped → delivered)
+* عرض تفاصيل الطلب
+* تتبع العملاء
+
+### ✔ Users
+
+* عرض المستخدمين
+* منع / حظر
+* تحليل سلوك بسيط
+
+### ✔ Inventory
+
+* متابعة المخزون الحقيقي
+* تنبيهات low stock
+
+---
+
+# 🧱 ARCHITECTURE
+
+```
+app/
+ └── admin/
+      ├── layout.tsx
+      ├── page.tsx
+      ├── products/
+      │    ├── page.tsx
+      │    ├── new/page.tsx
+      │    └── [id]/page.tsx
+      ├── orders/
+      │    ├── page.tsx
+      │    └── [id]/page.tsx
+      ├── users/
+      │    └── page.tsx
+      └── inventory/
+           └── page.tsx
+```
+
+---
+
+# 🔐 1. Admin Guard (أهم جزء)
+
+📍 `lib/auth/useRequireAdmin.ts`
+
+```ts
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/store/authStore";
+
+export const useRequireAdmin = () => {
+  const router = useRouter();
+  const { user, token } = useAuthStore();
+
+  useEffect(() => {
+    if (!token || !user) {
+      router.push("/login");
+      return;
+    }
+
+    if (user.role !== "admin") {
+      router.push("/unauthorized");
+    }
+  }, [user, token]);
+
+  return { user };
+};
+```
+
+---
+
+# 🏠 2. Admin Layout
+
+📍 `app/admin/layout.tsx`
+
+```tsx
+"use client";
+
+import Link from "next/link";
+import { useRequireAdmin } from "@/lib/auth/useRequireAdmin";
+
+export default function AdminLayout({ children }) {
+  useRequireAdmin();
+
+  return (
+    <div className="flex min-h-screen bg-gray-100">
+      
+      {/* Sidebar */}
+      <aside className="w-64 bg-black text-white p-4">
+        <h1 className="text-xl font-bold mb-6">GEN ERA ADMIN</h1>
+
+        <nav className="space-y-3">
+          <Link href="/admin">Dashboard</Link>
+          <Link href="/admin/products">Products</Link>
+          <Link href="/admin/orders">Orders</Link>
+          <Link href="/admin/users">Users</Link>
+          <Link href="/admin/inventory">Inventory</Link>
+        </nav>
+      </aside>
+
+      {/* Content */}
+      <main className="flex-1 p-6">{children}</main>
+    </div>
+  );
+}
+```
+
+---
+
+# 📦 3. Products Admin Page
+
+📍 `app/admin/products/page.tsx`
+
+```tsx
+"use client";
+
+import { useEffect, useState } from "react";
+
+export default function AdminProductsPage() {
+  const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/v2/products")
+      .then(res => res.json())
+      .then(setProducts);
+  }, []);
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold mb-4">Products</h1>
+
+      <table className="w-full bg-white shadow">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Price</th>
+            <th>Stock</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {products.map((p: any) => (
+            <tr key={p.id}>
+              <td>{p.name}</td>
+              <td>{p.price}</td>
+              <td>{p.stock}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+```
+
+---
+
+# 📦 4. Orders Admin Page
+
+📍 `app/admin/orders/page.tsx`
+
+```tsx
+"use client";
+
+import { useEffect, useState } from "react";
+
+export default function AdminOrdersPage() {
+  const [orders, setOrders] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/v2/orders")
+      .then(res => res.json())
+      .then(setOrders);
+  }, []);
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold mb-4">Orders</h1>
+
+      <div className="space-y-4">
+        {orders.map((o: any) => (
+          <div key={o.id} className="p-4 bg-white shadow">
+            <p>Order #: {o.orderNumber}</p>
+            <p>Status: {o.status}</p>
+            <p>Total: {o.total}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+# 📊 5. Inventory Page (Important)
+
+📍 `app/admin/inventory/page.tsx`
+
+```tsx
+"use client";
+
+import { useEffect, useState } from "react";
+
+export default function InventoryPage() {
+  const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/v2/products")
+      .then(res => res.json())
+      .then(setProducts);
+  }, []);
+
+  const lowStock = products.filter((p: any) => p.stock < 5);
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold mb-4">Inventory</h1>
+
+      <div className="text-red-500 mb-4">
+        Low Stock Items: {lowStock.length}
+      </div>
+
+      {lowStock.map((p: any) => (
+        <div key={p.id} className="p-3 bg-red-50 mb-2">
+          {p.name} — Only {p.stock} left
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+---
+
+# 🔐 6. Backend Requirement (مهم)
+
+لازم backend يكون فيه:
+
+### ✔ Role Field
+
+```ts
+role: "user" | "admin"
+```
+
+### ✔ Admin Middleware
+
+```ts
+export const requireAdmin = (req, res, next) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ message: "Admin only" });
+  }
+  next();
+};
+```
+
+---
+
+# 🚀 النتيجة بعد STEP 6
+
+## 🧠 أصبح عندك:
+
+### ✔ Admin Panel كامل
+
+* Products Control
+* Orders Control
+* Inventory Monitor
+* User Management Ready
+
+### ✔ نظام يشبه:
+
+* Shopify Admin
+* Stripe Dashboard
+* Nike backend tools
+
+---
+
+# 🔥 الأهم الآن
+
+المشروع بعد المرحلة دي يصبح:
+
+> 🏗️ **Enterprise E-commerce Operating System**
+
+---
+
+# 🚀 الخطوة القادمة (STEP 7)
+
+لو كملت معي، هنبني:
+
+## ⚡ STEP 7 — SECURITY + PERFORMANCE HARDENING
+
+* Zod validation system
+* Rate limiting intelligent
+* CORS lockdown
+* Logging system (Pino)
+* API monitoring layer
+* request tracing IDs
+
+---
+
+# 👉 قول الآن:
+
+> "ابدأ Step 7"
+
+وأنا هحوّل GEN ERA إلى **production-grade system كامل جاهز للإطلاق الحقيقي**.
