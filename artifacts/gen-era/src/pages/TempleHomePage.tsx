@@ -5,6 +5,7 @@ import { AudioProvider, useAudio } from "@/lib/audio/AudioContext";
 import TempleScene from "@/components/temple/TempleScene";
 import TempleNav from "@/components/temple/TempleNav";
 import ProductInfoPanel from "@/components/temple/products/ProductInfoPanel";
+import ProductChamber from "@/components/temple/chamber/ProductChamber";
 
 function checkWebGL(): boolean {
   try {
@@ -89,6 +90,9 @@ function TempleContent() {
 
       {/* Temple Commerce Layer — Product Info Panel */}
       <ProductInfoPanel />
+
+      {/* Temple Commerce Layer — Immersive Product Chamber */}
+      <ProductChamber />
 
       <TempleNav onAudioToggle={handleAudioToggle} />
 

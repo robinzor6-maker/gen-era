@@ -18,7 +18,7 @@ function getLoreText(tags: string[], name: string): string {
 }
 
 export default function ProductInfoPanel() {
-  const { selectedProduct, isPanelOpen, closeProduct } = useTempleStore();
+  const { selectedProduct, isPanelOpen, closeProduct, openChamber } = useTempleStore();
   const { addToCart } = useCartStore();
 
   const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
@@ -371,30 +371,32 @@ export default function ProductInfoPanel() {
                 : 'CLAIM ARTIFACT'}
           </button>
 
-          {/* View full detail link */}
-          <a
-            href={`/store/${product.slug}`}
+          {/* Enter Chamber CTA */}
+          <button
+            onClick={() => openChamber()}
             style={{
-              display: 'block',
-              textAlign: 'center',
-              fontFamily: "'Share Tech Mono', monospace",
-              fontSize: '0.4rem',
-              letterSpacing: '0.25em',
-              color: `${accent}66`,
-              textDecoration: 'none',
-              padding: '6px 0',
-              border: `1px solid ${accent}22`,
-              transition: 'color 0.2s',
+              width: '100%',
+              padding: '10px 0',
+              background: 'transparent',
+              border: `1px solid ${accent}44`,
+              color: accent,
+              fontFamily: "'Cinzel', serif",
+              fontSize: '0.48rem',
+              letterSpacing: '0.28em',
+              cursor: 'pointer',
+              transition: 'all 0.25s',
             }}
-            onMouseEnter={(e) =>
-              ((e.target as HTMLElement).style.color = accent)
-            }
-            onMouseLeave={(e) =>
-              ((e.target as HTMLElement).style.color = `${accent}66`)
-            }
+            onMouseEnter={(e) => {
+              (e.target as HTMLElement).style.background = `${accent}12`;
+              (e.target as HTMLElement).style.boxShadow = `0 0 16px ${accent}33`;
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLElement).style.background = 'transparent';
+              (e.target as HTMLElement).style.boxShadow = 'none';
+            }}
           >
-            FULL ARTIFACT RECORD →
-          </a>
+            ⬡ ENTER ARTIFACT CHAMBER
+          </button>
 
           {/* Bottom accent */}
           <div

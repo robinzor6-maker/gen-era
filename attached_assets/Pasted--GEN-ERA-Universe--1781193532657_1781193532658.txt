@@ -1,0 +1,188 @@
+نعم، إذا كان هدف **GEN ERA Universe** أن يكون تجربة مختلفة عن متجر ملابس عادي، فالخطوة التالية ليست إضافة صفحة جديدة، بل بناء **Product Chamber الحقيقي**.
+
+## STEP 8.1 — Immersive Product Chamber
+
+حالياً لديك:
+
+* ✅ Temple Scene
+* ✅ Product Pedestals
+* ✅ Product Selection Store
+* ✅ Camera Focus System
+* ✅ Product Panel
+* ✅ API Products
+* ✅ Cart Integration
+
+الناقص هو:
+
+**عندما يضغط المستخدم على التمثال:**
+
+Temple → Transition → Chamber → Product Experience
+
+بدلاً من ظهور Panel جانبي فقط.
+
+---
+
+# Product Chamber Architecture
+
+```
+Temple
+│
+├── Pedestal
+│
+└── Click
+      │
+      ▼
+
+Product Chamber
+
+├── Floating Product
+├── Ancient Rings
+├── Egyptian Symbols
+├── Product Lore
+├── Size Selector
+├── Color Selector
+├── Add To Cart
+└── Return To Temple
+```
+
+---
+
+# STEP 8.2 — Real 3D Clothing Models
+
+حالياً المنتج عبارة عن:
+
+```tsx
+OctahedronGeometry
+```
+
+وهذا مجرد Placeholder.
+
+المرحلة القادمة:
+
+```
+/public/models
+
+hoodie.glb
+suit.glb
+tshirt.glb
+```
+
+ثم:
+
+```tsx
+useGLTF("/models/hoodie.glb")
+```
+
+لكل منتج.
+
+---
+
+# STEP 8.3 — ANKHRON & OSYRON Activation
+
+حالياً الشخصيات موجودة في الـ Lore.
+
+المرحلة القادمة:
+
+### ANKHRON
+
+يظهر بجانب منتجات:
+
+* Midnight Core
+* Gray Collection
+
+### OSYRON
+
+يظهر بجانب:
+
+* Ignite Signal
+* Orange Collection
+
+مثال:
+
+```
+OSYRON:
+"Energy is not worn.
+It is awakened."
+```
+
+---
+
+# STEP 8.4 — Collectibles System
+
+إنشاء جداول جديدة:
+
+```sql
+collectibles
+user_collectibles
+```
+
+كل عملية شراء تمنح:
+
+```txt
+Relic
+Glyph
+Artifact
+Fragment
+```
+
+داخل حساب المستخدم.
+
+---
+
+# STEP 8.5 — Temple Navigation
+
+حالياً:
+
+```txt
+Temple
+```
+
+فقط.
+
+الهدف:
+
+```txt
+Temple
+│
+├── Products
+├── Lore
+├── Characters
+├── AR Portal
+├── Collectibles
+└── Marketplace
+```
+
+---
+
+# STEP 8.6 — AR Portal الحقيقي
+
+لأن رؤية GEN ERA تعتمد على:
+
+> Fashion × Egypt × Technology
+
+الخطوة التالية بعد Chamber:
+
+```
+AR Try-On
+```
+
+باستخدام:
+
+* WebXR
+* 8thWall
+* Snap AR
+* Meta Spark بديل إذا لزم
+
+---
+
+# ترتيب التنفيذ الذي أوصي به
+
+1. ✅ Product Chamber الحقيقي
+2. ✅ استبدال المجسمات المؤقتة بملفات GLB
+3. ✅ تفعيل ANKHRON و OSYRON
+4. ✅ نظام Collectibles
+5. ✅ Temple Navigation
+6. ✅ AR Portal الحقيقي
+7. ✅ Marketplace داخل الـ Universe
+
+هذا سيحوّل المشروع من **متجر إلكتروني ثلاثي الأبعاد** إلى **عالم GEN ERA التفاعلي الكامل** الذي كنت تخطط له منذ البداية.
