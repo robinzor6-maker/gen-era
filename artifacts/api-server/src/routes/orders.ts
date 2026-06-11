@@ -230,8 +230,14 @@ router.get("/", async (req: Request, res: Response) => {
   res.json({ success: true, data: result, pagination: { page: 1, limit: 50, total: result.length, pages: 1 } });
 });
 
-// GET /api/v1/orders/:id
+// GET /api/v1/orders/:id  (requires auth — owner or admin)
 router.get("/:id", async (req: Request, res: Response) => {
+  const authUser = await getUserFromToken(req);
+  if (!authUser) {
+    res.status(401).json({ success: false, message: "Authentication required." });
+    return;
+  }
+
   const { id } = req.params;
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
@@ -243,6 +249,12 @@ router.get("/:id", async (req: Request, res: Response) => {
 
   if (!order) {
     res.status(404).json({ success: false, message: "Order not found." });
+    return;
+  }
+
+  // Admins see all orders; registered users only see their own
+  if (authUser.role !== "admin" && order.userId !== authUser.id) {
+    res.status(403).json({ success: false, message: "Access denied." });
     return;
   }
 
