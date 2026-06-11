@@ -87,3 +87,6 @@ externalPort = 3000
 [[ports]]
 localPort = 20856
 externalPort = 3002
+
+[nix]
+packages = ["tree"]
