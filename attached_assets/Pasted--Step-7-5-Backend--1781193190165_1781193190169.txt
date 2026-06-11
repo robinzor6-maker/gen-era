@@ -1,0 +1,265 @@
+ممتاز. من التقرير واضح أن **Step 7.5 اكتمل فعلياً** وأن الـ Backend أصبح في حالة مستقرة نسبياً.
+
+بما أن هدف GEN ERA ليس متجر E-Commerce تقليدي بل **Universe Platform**، فأنا أوصي ألا نبدأ الآن بـ:
+
+* NFC
+* Collectibles
+* AR
+* Character Unlocks
+
+قبل إنهاء **Temple Commerce Layer** بالكامل.
+
+# الترتيب الاحترافي الصحيح الآن
+
+## ✅ Step 8.0 — Temple Commerce Foundation
+
+الهدف:
+
+تحويل الـ Temple الموجود حالياً من مجرد مشهد بصري إلى نظام تجارة فعلي.
+
+---
+
+## المرحلة A
+
+### Temple Product Engine
+
+إنشاء:
+
+```bash
+src/store/templeStore.ts
+```
+
+يحتوي:
+
+```ts
+selectedProduct
+focusedProduct
+panelOpen
+chamberOpen
+```
+
+---
+
+## المرحلة B
+
+### API Integration
+
+إنشاء:
+
+```bash
+src/hooks/useTempleProducts.ts
+```
+
+يقوم بـ:
+
+```ts
+GET /api/v1/products
+```
+
+بدون أي Mock Data.
+
+---
+
+## المرحلة C
+
+### Product Pedestal
+
+إنشاء:
+
+```bash
+src/components/temple/products/ProductPedestal.tsx
+```
+
+وظيفته:
+
+* منصة حجرية
+* Hieroglyph Base
+* Glow عند Hover
+
+---
+
+## المرحلة D
+
+### Product Statue
+
+إنشاء:
+
+```bash
+src/components/temple/products/ProductStatue.tsx
+```
+
+بدلاً من:
+
+```tsx
+<ProductCard />
+```
+
+يصبح:
+
+```tsx
+<ProductStatue />
+```
+
+ويمثل:
+
+* Hoodie
+* Suit
+* T-Shirt
+
+كنموذج ثلاثي الأبعاد.
+
+---
+
+## المرحلة E
+
+### Product Hotspots
+
+عند الاقتراب:
+
+```text
+𓂀 PHARAOH CORE
+
+Legendary Artifact
+
+120 USD
+```
+
+---
+
+## المرحلة F
+
+### Camera Controller
+
+ملف:
+
+```bash
+src/components/temple/camera/CameraController.tsx
+```
+
+وظيفته:
+
+```ts
+focusProduct()
+```
+
+و
+
+```ts
+returnToTemple()
+```
+
+---
+
+## المرحلة G
+
+### Product Chamber
+
+عند الضغط على المنتج:
+
+الكاميرا تنتقل إلى غرفة خاصة.
+
+داخل الغرفة:
+
+* المنتج
+* الوصف
+* المقاسات
+* الألوان
+* المخزون
+* Add To Cart
+
+---
+
+# ما لا ننفذه الآن
+
+❌ NFC
+
+❌ Collectibles
+
+❌ Unlock System
+
+❌ Character Inventory
+
+❌ AR Scanning
+
+❌ Marketplace
+
+هذه كلها تعتمد على اكتمال Temple Commerce أولاً.
+
+---
+
+# بعد Step 8
+
+ننتقل إلى:
+
+## Step 9
+
+### Character System
+
+ANKHRON
+
+OSYRON
+
+Character AI
+
+Lore Engine
+
+Voice System
+
+---
+
+## Step 10
+
+### Collectibles Layer
+
+```text
+NFC
+QR
+Unlocks
+Inventory
+Artifacts
+```
+
+---
+
+## Step 11
+
+### AR Portal Layer
+
+```text
+Try On
+Portal Mode
+Character Projection
+```
+
+---
+
+## Step 12
+
+### GEN ERA Universe Core
+
+العالم الكامل:
+
+```text
+Temple
+Characters
+Products
+Collectibles
+AR
+Story
+Community
+```
+
+---
+
+إذا كنت تعمل حالياً داخل Replit مع المشروع المفتوح، فأنصح أن تكون **المهمة التالية مباشرة**:
+
+> **Build Step 8.0 — Temple Commerce Foundation (Phase A + B only)**
+
+أي:
+
+1. إنشاء `templeStore.ts`
+2. إنشاء `useTempleProducts.ts`
+3. ربط المنتجات الحقيقية من قاعدة البيانات
+4. التأكد أن البيانات تظهر داخل الـ Temple Scene
+
+ثم ننتقل بعد ذلك إلى `ProductPedestal` و `ProductStatue` في خطوة منفصلة. هذا يقلل الأخطاء ويحافظ على استقرار المشروع أثناء التطوير.
