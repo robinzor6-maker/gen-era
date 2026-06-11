@@ -10,7 +10,11 @@ import HotspotPanel from "./HotspotPanel";
 import ProductPedestal from "./products/ProductPedestal";
 import EmptyPedestal from "./products/EmptyPedestal";
 import CameraController from "./products/CameraController";
+import TempleDistrictManager from "./TempleDistrictManager";
+import TempleSearchOverlay from "./TempleSearchOverlay";
 import { useTempleProducts } from "@/hooks/useTempleProducts";
+import { useTempleSearch } from "@/hooks/useTempleSearch";
+import { useTempleFilters } from "@/hooks/useTempleFilters";
 
 const HOTSPOTS: HotspotData[] = [
   {
@@ -65,7 +69,7 @@ const HOTSPOTS: HotspotData[] = [
   },
 ];
 
-// Product pedestal positions — placed between pillars, away from hotspots
+// Pedestal positions — 9 slots around the temple floor
 const PEDESTAL_POSITIONS: [number, number, number][] = [
   [-4, 0, 7],
   [0, 0, 8],
@@ -81,19 +85,17 @@ const PEDESTAL_POSITIONS: [number, number, number][] = [
 function SceneLights() {
   return (
     <>
-      <ambientLight color="#0d0520" intensity={0.8} />
+      <ambientLight color="#0d0520" intensity={0.9} />
       <directionalLight
-        color="#d4a853"
-        intensity={0.6}
-        position={[10, 18, 8]}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        color="#d4a853" intensity={0.65}
+        position={[10, 18, 8]} castShadow
+        shadow-mapSize-width={1024} shadow-mapSize-height={1024}
       />
-      <pointLight color="#ff6b1a" intensity={1.2} position={[0, 8, 0]} distance={25} decay={2} />
-      <pointLight color="#1a0050" intensity={2.0} position={[0, 0.5, 0]} distance={20} decay={2} />
-      <pointLight color="#d4a853" intensity={0.4} position={[-15, 5, -15]} distance={18} decay={2} />
-      <pointLight color="#ff6b1a" intensity={0.4} position={[15, 5, 15]} distance={18} decay={2} />
+      <pointLight color="#ff6b1a" intensity={1.3} position={[0, 8, 0]}    distance={25} decay={2} />
+      <pointLight color="#1a0050" intensity={2.2} position={[0, 0.5, 0]}  distance={20} decay={2} />
+      <pointLight color="#d4a853" intensity={0.45} position={[-15, 5, -15]} distance={18} decay={2} />
+      <pointLight color="#ff6b1a" intensity={0.45} position={[15, 5, 15]}  distance={18} decay={2} />
+      <pointLight color="#00d4ff" intensity={0.25} position={[15, 5, -15]} distance={14} decay={2} />
     </>
   );
 }
@@ -107,12 +109,19 @@ function LoadingFallback() {
   );
 }
 
-function TempleProducts({ controlsRef }: { controlsRef: RefObject<any> }) {
-  const { products } = useTempleProducts();
-
+function TempleProducts({
+  controlsRef,
+  products,
+  allProducts,
+}: {
+  controlsRef: RefObject<any>;
+  products: ReturnType<typeof useTempleFilters>;
+  allProducts: ReturnType<typeof useTempleFilters>;
+}) {
   return (
     <>
       <CameraController controlsRef={controlsRef} />
+      <TempleDistrictManager products={allProducts} />
       {PEDESTAL_POSITIONS.map((pos, i) => {
         const product = products[i];
         return product ? (
@@ -132,6 +141,9 @@ interface TempleSceneProps {
 
 export default function TempleScene({ openHotspotId, onHotspotOpen }: TempleSceneProps) {
   const controlsRef = useRef<any>(null);
+  const { products } = useTempleProducts();
+  const search       = useTempleSearch();
+  const filtered     = useTempleFilters(products, search);
 
   const openHotspot = useMemo(
     () => HOTSPOTS.find(h => h.id === openHotspotId) ?? null,
@@ -144,21 +156,17 @@ export default function TempleScene({ openHotspotId, onHotspotOpen }: TempleScen
         shadows
         dpr={[1, 1.5]}
         camera={{ position: [0, 5, 16], fov: 65, near: 0.1, far: 200 }}
-        gl={{
-          antialias: true,
-          alpha: false,
-          powerPreference: "high-performance",
-        }}
+        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         style={{ background: "#000005" }}
       >
-        <fog attach="fog" args={["#000005", 25, 55]} />
+        <fog attach="fog" args={["#000005", 22, 55]} />
 
         <SceneLights />
 
         <Suspense fallback={<LoadingFallback />}>
           <TempleEnvironment />
           <VoidCore />
-          <TempleParticles count={280} />
+          <TempleParticles count={300} />
 
           {HOTSPOTS.map(h => (
             <TempleHotspot
@@ -169,7 +177,11 @@ export default function TempleScene({ openHotspotId, onHotspotOpen }: TempleScen
             />
           ))}
 
-          <TempleProducts controlsRef={controlsRef} />
+          <TempleProducts
+            controlsRef={controlsRef}
+            products={filtered}
+            allProducts={products}
+          />
         </Suspense>
 
         <OrbitControls
@@ -183,16 +195,19 @@ export default function TempleScene({ openHotspotId, onHotspotOpen }: TempleScen
           maxPolarAngle={Math.PI / 2.1}
           rotateSpeed={0.55}
           zoomSpeed={0.7}
-          touches={{
-            ONE: THREE.TOUCH.ROTATE,
-            TWO: THREE.TOUCH.DOLLY_ROTATE,
-          }}
+          touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_ROTATE }}
           target={[0, 3, 0]}
         />
       </Canvas>
+
+      {/* HTML overlays */}
+      <TempleSearchOverlay
+        search={search}
+        resultCount={filtered.length}
+        totalCount={products.length}
+      />
 
       <HotspotPanel data={openHotspot} onClose={() => onHotspotOpen("")} />
     </>
   );
 }
-

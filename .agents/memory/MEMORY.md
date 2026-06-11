@@ -1,2 +1,3 @@
 - [GEN ERA DB schema](gen-era-db.md) — must push schema before API returns data; use `pnpm --filter @workspace/db run push`
 - [GEN ERA screenshot tool](gen-era-screenshot.md) — R3F scene captures dark on screenshot tool (fresh WebGL init); trust console logs over screenshots
+- [GEN ERA STEP 8.2 architecture](gen-era-step82.md) — product statues, claim ceremony, district system, lore engine, analytics all built; key files and patterns

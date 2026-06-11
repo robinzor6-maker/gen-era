@@ -1,0 +1,348 @@
+إذا كنت تريد بناء **GEN ERA Universe** بمستوى عالمي وليس مجرد متجر 3D، فالخطوتك التالية ليست 8.3 مباشرة.
+
+الخطوة الصحيحة هندسياً هي:
+
+# STEP 8.2 — Product Statues & Commerce Expansion Layer
+
+هذه المرحلة ستحول المعبد من معرض منتجات إلى عالم تجارة تفاعلي حقيقي.
+
+---
+
+## الهدف النهائي
+
+عندما يدخل العميل موقع GEN ERA:
+
+* يرى المعبد
+* يرى تماثيل المنتجات
+* يقترب من التمثال
+* يسمع صوت ANKHRON أو OSYRON
+* يدخل Artifact Chamber
+* يشاهد القطعة تدور أمامه
+* يقوم بـ Claim Artifact
+* تحدث مراسم انتقال أسطورية
+* تنتقل القطعة إلى السلة
+
+ليس متجرًا...
+
+بل تجربة Universe كاملة.
+
+---
+
+# البرومبت الاحترافي العالمي
+
+انسخه بالكامل إلى Cursor / Claude Code / Copilot Agent.
+
+# GEN ERA — STEP 8.2 PRODUCT STATUES & COMMERCE EXPANSION
+
+ROLE
+
+Act as a Senior AAA Game Engineer, Senior Three.js Architect, Senior React Three Fiber Developer, Senior UX Engineer, Senior E-Commerce Architect and Senior Technical Art Director.
+
+Your mission is to transform the current GEN ERA Temple Commerce System into a complete immersive commerce universe.
+
+Current Stack
+
+* Next.js 16
+* React 19
+* TypeScript
+* React Three Fiber
+* Drei
+* Zustand
+* Framer Motion
+* Express API
+* PostgreSQL
+* Drizzle ORM
+
+Current State
+
+Already completed:
+
+* Temple Scene
+* Product Pedestals
+* Product Chamber
+* Camera Controller
+* Product Panel
+* Product Store
+* Commerce API
+* Cart System
+
+Now build STEP 8.2.
+
+---
+
+PHASE 1 — REAL PRODUCT STATUES
+
+Create:
+
+components/temple/statues/
+
+* HoodieStatue.tsx
+* SuitStatue.tsx
+* TshirtStatue.tsx
+* PantsStatue.tsx
+
+Requirements:
+
+Each statue must:
+
+* Float above pedestal
+* Slowly rotate
+* Cast shadows
+* Receive shadows
+* Have emissive Egyptian energy lines
+* Have rarity aura
+
+Rare:
+gold aura
+
+Epic:
+orange aura
+
+Legendary:
+white-gold aura
+
+Every product category renders its own statue.
+
+No placeholder gems.
+
+---
+
+PHASE 2 — ARTIFACT CLAIM CEREMONY
+
+When user presses:
+
+CLAIM ARTIFACT
+
+Trigger sequence:
+
+1. Product glows
+2. Rings accelerate
+3. Temple particles explode
+4. Energy beam descends
+5. Portal opens
+6. Product flies toward portal
+7. Add item to cart
+8. Success animation
+
+Create:
+
+components/temple/effects/
+
+* ClaimCeremony.tsx
+* PortalExplosion.tsx
+* EnergyBeam.tsx
+
+Use:
+
+* Framer Motion
+* R3F animations
+* useFrame
+
+Target:
+
+AAA Game Quality
+
+---
+
+PHASE 3 — TEMPLE DISTRICTS
+
+Split products into worlds.
+
+Create:
+
+ANKHRON DISTRICT
+
+Theme:
+Ancient Egypt
+Archive Collection
+Past Memory
+
+OSYRON DISTRICT
+
+Theme:
+Fire
+Energy
+Revolution
+
+GEN CORE DISTRICT
+
+Theme:
+Neutral
+Modern
+Essential Pieces
+
+Requirements:
+
+Temple map contains:
+
+* portals
+* district transitions
+* animated gateways
+
+Create:
+
+TempleDistrictManager.tsx
+
+---
+
+PHASE 4 — PRODUCT DISCOVERY ENGINE
+
+Create:
+
+hooks/
+
+* useTempleSearch.ts
+* useTempleFilters.ts
+
+Features:
+
+Search by:
+
+* name
+* collection
+* rarity
+
+Filter by:
+
+* price
+* color
+* size
+* category
+
+Temple updates instantly.
+
+---
+
+PHASE 5 — DYNAMIC LORE ENGINE
+
+Create:
+
+lib/lore/
+
+generateLore.ts
+
+Inputs:
+
+* collection
+* rarity
+* character
+* season
+
+Outputs:
+
+unique lore text.
+
+No hardcoded lore.
+
+Lore generated dynamically.
+
+---
+
+PHASE 6 — COMMERCE ANALYTICS
+
+Create:
+
+database tables
+
+artifact_views
+artifact_chamber_visits
+artifact_claims
+
+Track:
+
+* pedestal clicks
+* chamber opens
+* claims
+* conversions
+
+Create dashboard cards:
+
+Most Viewed Artifact
+
+Most Claimed Artifact
+
+Conversion Rate
+
+Top Revenue Artifact
+
+---
+
+PHASE 7 — PERFORMANCE
+
+Requirements
+
+60 FPS minimum
+
+Implement:
+
+* instancing
+* memoization
+* texture optimization
+* lazy loading
+* suspense boundaries
+
+Target:
+
+Desktop:
+60 FPS
+
+Mobile:
+45 FPS minimum
+
+---
+
+PHASE 8 — VISUAL POLISH
+
+Add:
+
+* volumetric fog
+* god rays
+* temple dust
+* emissive hieroglyphs
+* cinematic bloom
+* chromatic aberration
+* portal distortion
+
+Visual target:
+
+Apple Vision Pro Demo Quality
+
+Unreal Engine Inspired
+
+---
+
+FINAL RESULT
+
+User Flow
+
+Temple
+
+→ Product Statue
+
+→ Artifact Chamber
+
+→ Claim Ceremony
+
+→ Cart
+
+→ Checkout
+
+The experience must feel like:
+
+"Discovering an ancient futuristic artifact rather than buying clothing."
+
+Generate production-ready code architecture, folder structure, Zustand state updates, React components, Drizzle schemas, API routes and implementation plan.
+
+No placeholders.
+
+No mock code.
+
+Production quality only.
+
+### بعد الانتهاء من STEP 8.2
+
+ننتقل إلى:
+
+**STEP 8.3 — ANKHRON & OSYRON Character Activation System**
+
+وفيها تظهر شخصيات GEN ERA نفسها داخل العالم ثلاثي الأبعاد بصوت وحركة وتفاعل مباشر مع المستخدم والمنتجات، وهي المرحلة التي ستجعل المشروع أقرب إلى لعبة AAA منها إلى متجر إلكتروني.

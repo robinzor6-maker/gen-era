@@ -4,26 +4,9 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { Product } from '@/lib/types';
 import { useTempleStore } from '@/stores/templeStore';
-
-function getColor(product: Product): string {
-  const text = [
-    ...(product.tags ?? []),
-    product.name,
-    product.collection ?? '',
-  ]
-    .join(' ')
-    .toLowerCase();
-  if (/fire|osyron|flame|inferno|blaze/.test(text)) return '#ff6b1a';
-  return '#d4a853';
-}
-
-function getLore(product: Product): string {
-  const text = [...(product.tags ?? []), product.name].join(' ').toLowerCase();
-  if (/fire|osyron|flame/.test(text)) {
-    return 'FORGED WITHIN THE FLAME PROTOCOL OF OSYRON';
-  }
-  return 'THIS ARTIFACT BELONGS TO THE ARCHIVE OF ANKHRON';
-}
+import ProductStatue from '@/components/temple/statues/ProductStatue';
+import { getDistrict, getRarity, RARITY_COLORS, DISTRICT_COLORS, generateShortLore } from '@/lib/lore/generateLore';
+import { api } from '@/lib/api';
 
 interface Props {
   product: Product;
@@ -32,85 +15,67 @@ interface Props {
 }
 
 export default function ProductPedestal({ product, position, index }: Props) {
-  const groupRef = useRef<THREE.Group>(null);
-  const gemRef = useRef<THREE.Mesh>(null);
-  const ringRef = useRef<THREE.Mesh>(null);
-  const glowRef = useRef<THREE.PointLight>(null);
+  const groupRef  = useRef<THREE.Group>(null);
+  const ringRef   = useRef<THREE.Mesh>(null);
+  const glowRef   = useRef<THREE.PointLight>(null);
   const [hovered, setHovered] = useState(false);
 
   const { openProduct } = useTempleStore();
 
-  const accent = getColor(product);
-  const lore = getLore(product);
+  const district    = getDistrict(product);
+  const rarity      = getRarity(product);
+  const rarityColor = RARITY_COLORS[rarity];
+  const accent      = DISTRICT_COLORS[district].primary;
 
-  const pedestalMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: '#14100a',
-        metalness: 0.75,
-        roughness: 0.45,
-        emissive: accent,
-        emissiveIntensity: 0.04,
-      }),
-    [accent]
-  );
+  const shortLore = generateShortLore(product);
 
-  const slabMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: '#c8982a',
-        metalness: 0.92,
-        roughness: 0.12,
-        emissive: accent,
-        emissiveIntensity: hovered ? 0.5 : 0.18,
-      }),
-    [accent, hovered]
-  );
+  const pedestalMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: '#0f0c18',
+    metalness: 0.78,
+    roughness: 0.38,
+    emissive: accent,
+    emissiveIntensity: hovered ? 0.18 : 0.05,
+  }), [accent, hovered]);
 
-  const gemMat = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: accent,
-        metalness: 0.1,
-        roughness: 0.05,
-        emissive: accent,
-        emissiveIntensity: hovered ? 1.4 : 0.65,
-        transparent: true,
-        opacity: 0.82,
-        transmission: 0.15,
-      }),
-    [accent, hovered]
-  );
+  const slabMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: '#1a1428',
+    metalness: 0.95,
+    roughness: 0.1,
+    emissive: rarityColor,
+    emissiveIntensity: hovered ? 0.65 : 0.2,
+  }), [rarityColor, hovered]);
 
-  const orbitMat = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: accent,
-        transparent: true,
-        opacity: hovered ? 0.55 : 0.22,
-        wireframe: false,
-      }),
-    [accent, hovered]
-  );
+  const runeRingMat = useMemo(() => new THREE.MeshBasicMaterial({
+    color: rarityColor,
+    transparent: true,
+    opacity: hovered ? 0.7 : 0.28,
+  }), [rarityColor, hovered]);
+
+  const cornerMat = useMemo(() => new THREE.MeshBasicMaterial({
+    color: accent,
+    transparent: true,
+    opacity: hovered ? 0.9 : 0.45,
+  }), [accent, hovered]);
 
   useFrame((state) => {
     const t = state.clock.elapsedTime + index * 1.3;
-
-    if (gemRef.current) {
-      gemRef.current.rotation.y += hovered ? 0.012 : 0.005;
-      gemRef.current.rotation.x = Math.sin(t * 0.45) * 0.1;
-      gemRef.current.position.y = 1.62 + Math.sin(t * 0.72) * 0.14;
-    }
-
-    if (ringRef.current) {
-      ringRef.current.rotation.z += 0.008;
-    }
-
+    if (ringRef.current) ringRef.current.rotation.z += hovered ? 0.016 : 0.006;
     if (glowRef.current) {
-      glowRef.current.intensity =
-        (hovered ? 2.5 : 0.9) + Math.sin(t * 1.4) * 0.35;
+      glowRef.current.intensity = (hovered ? 1.8 : 0.55) + Math.sin(t * 1.1) * 0.2;
+      glowRef.current.color.set(rarityColor);
     }
   });
+
+  const handleClick = (e: any) => {
+    e.stopPropagation();
+    openProduct(product, position);
+    api.post('/analytics/view', {
+      artifactId: product._id,
+      artifactName: product.name,
+      collection: product.collection ?? '',
+      district,
+    }).catch(() => {});
+  };
 
   return (
     <group
@@ -125,137 +90,157 @@ export default function ProductPedestal({ product, position, index }: Props) {
         setHovered(false);
         document.body.style.cursor = 'default';
       }}
-      onClick={(e) => {
-        e.stopPropagation();
-        openProduct(product, position);
-      }}
+      onClick={handleClick}
     >
-      {/* Pedestal base */}
-      <mesh material={pedestalMat} position={[0, 0.45, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.65, 0.82, 0.9, 8]} />
+      {/* ─── Pedestal base ──────────────────────────────────────────────────── */}
+      <mesh material={pedestalMat} position={[0, 0.42, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.62, 0.8, 0.84, 8]} />
       </mesh>
 
-      {/* Stepped middle */}
-      <mesh material={pedestalMat} position={[0, 0.95, 0]}>
-        <cylinderGeometry args={[0.55, 0.65, 0.1, 8]} />
+      {/* Stepped ring */}
+      <mesh material={pedestalMat} position={[0, 0.88, 0]}>
+        <cylinderGeometry args={[0.52, 0.62, 0.08, 8]} />
       </mesh>
 
-      {/* Gold top slab */}
-      <mesh material={slabMat} position={[0, 1.06, 0]}>
-        <boxGeometry args={[1.0, 0.1, 1.0]} />
+      {/* Gold-rim top slab */}
+      <mesh material={slabMat} position={[0, 0.98, 0]}>
+        <boxGeometry args={[1.05, 0.09, 1.05]} />
       </mesh>
 
-      {/* Glyph ring on slab */}
-      <mesh material={orbitMat} position={[0, 1.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.36, 0.42, 32]} />
+      {/* Rune ring on slab */}
+      <mesh ref={ringRef} material={runeRingMat} position={[0, 1.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.35, 0.42, 40]} />
       </mesh>
 
-      {/* Floating artifact gem */}
-      <mesh ref={gemRef} position={[0, 1.62, 0]} castShadow>
-        <octahedronGeometry args={[0.52, 0]} />
-        <primitive object={gemMat} attach="material" />
+      {/* Outer accent ring */}
+      <mesh material={runeRingMat} position={[0, 1.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.48, 0.52, 40]} />
       </mesh>
 
-      {/* Orbit ring around gem */}
-      <mesh ref={ringRef} position={[0, 1.62, 0]} rotation={[0.5, 0, 0]}>
-        <torusGeometry args={[0.72, 0.018, 8, 36]} />
-        <primitive object={orbitMat} attach="material" />
-      </mesh>
+      {/* Corner accent dots */}
+      {([[-0.46, 0.46], [0.46, 0.46], [-0.46, -0.46], [0.46, -0.46]] as [number,number][]).map(([cx, cz], i) => (
+        <mesh key={i} material={cornerMat} position={[cx, 1.035, cz]}>
+          <sphereGeometry args={[0.035, 6, 6]} />
+        </mesh>
+      ))}
 
-      {/* Glow light */}
+      {/* ─── Product statue (elevated above slab) ───────────────────────────── */}
+      <group position={[0, 1.1, 0]}>
+        <ProductStatue product={product} hovered={hovered} accent={accent} />
+      </group>
+
+      {/* Pedestal glow light */}
       <pointLight
         ref={glowRef}
-        color={accent}
-        intensity={0.9}
+        color={rarityColor}
+        intensity={0.55}
         distance={5}
         decay={2}
-        position={[0, 1.6, 0]}
+        position={[0, 1.1, 0]}
       />
 
-      {/* Hover info label */}
+      {/* ─── Hover info panel ───────────────────────────────────────────────── */}
       {hovered && (
         <Html
-          position={[0, 3.4, 0]}
+          position={[0, 3.8, 0]}
           center
           distanceFactor={12}
           style={{ pointerEvents: 'none' }}
           zIndexRange={[100, 200]}
         >
-          <div
-            style={{
-              background: 'rgba(0,0,5,0.94)',
-              border: `1px solid ${accent}55`,
-              padding: '10px 16px',
-              minWidth: 190,
-              maxWidth: 220,
-              textAlign: 'center',
-              boxShadow: `0 0 22px ${accent}44, inset 0 0 12px rgba(0,0,0,0.5)`,
-              backdropFilter: 'blur(8px)',
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "'Cinzel Decorative', serif",
-                fontSize: '0.58rem',
-                letterSpacing: '0.18em',
-                color: accent,
-                marginBottom: 5,
-                textShadow: `0 0 12px ${accent}`,
-              }}
-            >
-              𓂀 {product.name.toUpperCase()}
+          <div style={{
+            background: 'rgba(0,0,8,0.96)',
+            border: `1px solid ${accent}44`,
+            padding: '11px 18px',
+            minWidth: 200,
+            maxWidth: 240,
+            textAlign: 'center',
+            boxShadow: `0 0 28px ${accent}33, inset 0 0 14px rgba(0,0,0,0.6)`,
+            backdropFilter: 'blur(12px)',
+          }}>
+            {/* Top accent line */}
+            <div style={{
+              height: 1,
+              background: `linear-gradient(90deg, transparent, ${accent}, transparent)`,
+              marginBottom: 9,
+            }} />
+
+            {/* Rarity badge */}
+            {rarity !== 'rare' && (
+              <div style={{
+                fontFamily: "'Share Tech Mono', monospace",
+                fontSize: '0.34rem',
+                letterSpacing: '0.3em',
+                color: rarityColor,
+                marginBottom: 6,
+                textShadow: `0 0 8px ${rarityColor}`,
+              }}>
+                ◈ {rarity.toUpperCase()} ARTIFACT
+              </div>
+            )}
+
+            {/* Name */}
+            <div style={{
+              fontFamily: "'Cinzel Decorative', serif",
+              fontSize: '0.6rem',
+              letterSpacing: '0.15em',
+              color: accent,
+              marginBottom: 4,
+              textShadow: `0 0 14px ${accent}`,
+              lineHeight: 1.3,
+            }}>
+              {product.name.toUpperCase()}
             </div>
+
             {product.subtitle && (
-              <div
-                style={{
-                  fontFamily: "'Cinzel', serif",
-                  fontSize: '0.45rem',
-                  color: 'rgba(255,255,255,0.45)',
-                  letterSpacing: '0.08em',
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{
+                fontFamily: "'Cinzel', serif",
+                fontSize: '0.43rem',
+                color: 'rgba(255,255,255,0.38)',
+                letterSpacing: '0.08em',
+                marginBottom: 7,
+              }}>
                 {product.subtitle}
               </div>
             )}
-            <div
-              style={{
-                height: 1,
-                background: `linear-gradient(90deg, transparent, ${accent}44, transparent)`,
-                margin: '6px 0',
-              }}
-            />
-            <div
-              style={{
-                fontFamily: "'Share Tech Mono', monospace",
-                fontSize: '0.42rem',
-                color: `${accent}88`,
-                letterSpacing: '0.12em',
-                marginBottom: 6,
-              }}
-            >
-              {lore}
+
+            {/* Divider */}
+            <div style={{
+              height: 1,
+              background: `linear-gradient(90deg, transparent, ${accent}33, transparent)`,
+              margin: '7px 0',
+            }} />
+
+            {/* Lore */}
+            <div style={{
+              fontFamily: "'Share Tech Mono', monospace",
+              fontSize: '0.38rem',
+              color: `${accent}77`,
+              letterSpacing: '0.1em',
+              marginBottom: 7,
+            }}>
+              {shortLore}
             </div>
-            <div
-              style={{
-                fontFamily: "'Cinzel', serif",
-                fontSize: '0.78rem',
-                color: '#ffffff',
-                letterSpacing: '0.08em',
-                fontWeight: 600,
-              }}
-            >
+
+            {/* Price */}
+            <div style={{
+              fontFamily: "'Cinzel Decorative', serif",
+              fontSize: '0.88rem',
+              color: '#ffffff',
+              letterSpacing: '0.08em',
+              fontWeight: 600,
+            }}>
               ${product.price}
             </div>
-            <div
-              style={{
-                fontFamily: "'Share Tech Mono', monospace",
-                fontSize: '0.4rem',
-                color: `${accent}66`,
-                marginTop: 7,
-                letterSpacing: '0.18em',
-              }}
-            >
+
+            {/* CTA hint */}
+            <div style={{
+              fontFamily: "'Share Tech Mono', monospace",
+              fontSize: '0.37rem',
+              color: `${accent}55`,
+              marginTop: 8,
+              letterSpacing: '0.2em',
+            }}>
               [ CLICK TO EXAMINE ]
             </div>
           </div>

@@ -6,4 +6,7 @@ export {
   orderItemsTable,
   collectionsTable,
   sessionsTable,
+  artifactViewsTable,
+  artifactChamberVisitsTable,
+  artifactClaimsTable,
 } from "@workspace/db";
