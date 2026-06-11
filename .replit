@@ -20,20 +20,36 @@ author = "agent"
 task = "workflow.run"
 args = "API Server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Frontend"
+
 [[workflows.workflow]]
 name = "API Server"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/api-server run dev"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "console"
 
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server run dev"
+waitForPort = 3001
+
+[[workflows.workflow]]
+name = "Frontend"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/gen-era run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
@@ -44,14 +60,12 @@ timeoutMs = 20000
 
 [userenv.shared]
 JWT_SECRET = "add4b123b5cda98906cf20d8c509bc578de0037208af715a6fc7d3de19a669d967563d6773035afc1960f43456a53239064b4aa7b37f4f4c4e26a5317d2a6724"
-PORT = "5000"
+PORT = "3001"
+BASE_PATH = "/"
+VITE_API_URL = ""
 
 [[ports]]
 localPort = 5000
-externalPort = 5000
-
-[[ports]]
-localPort = 8080
 externalPort = 80
 
 [[ports]]
@@ -69,3 +83,7 @@ externalPort = 3000
 [[ports]]
 localPort = 20856
 externalPort = 3002
+
+[[ports]]
+localPort = 3001
+externalPort = 3001
