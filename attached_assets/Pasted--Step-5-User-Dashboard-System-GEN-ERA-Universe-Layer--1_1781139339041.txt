@@ -1,0 +1,340 @@
+تمام — نبدأ الآن **Step 5: User Dashboard System (GEN ERA Universe Layer)**
+وده أول مرة المشروع يتحول من “متجر” إلى **نظام مستخدمين + تجربة شخصية + عالم رقمي**.
+
+---
+
+# 👤 Step 5 — User Dashboard System
+
+## 🎯 الهدف
+
+بناء مساحة لكل مستخدم داخل GEN ERA تحتوي على:
+
+* 📦 الطلبات (Order History)
+* 👤 الملف الشخصي (Profile)
+* ❤️ Wishlist
+* 🧿 Collectibles (NFC / Characters)
+* 🧠 AR Entry Point (جاهز للمرحلة التالية)
+* ⚙️ إعدادات الحساب
+
+---
+
+# 🧠 الفكرة الأساسية
+
+قبل:
+
+> المستخدم مجرد عميل بيشتري
+
+بعد:
+
+> المستخدم عنده **هوية داخل العالم (GEN ERA Identity)**
+
+---
+
+# 🗄️ 1. Backend — User Dashboard APIs
+
+## 📁 `src/routes/dashboard.ts`
+
+```ts id="dash1"
+import { Router } from "express";
+import { authJWT } from "../middleware/authJWT";
+import { db } from "@workspace/db";
+import { orders } from "@workspace/db/schema/orders";
+import { wishlist } from "@workspace/db/schema/wishlist";
+import { users } from "@workspace/db/schema/users";
+import { eq } from "drizzle-orm";
+
+const router = Router();
+
+/**
+ * 👤 PROFILE
+ */
+router.get("/profile", authJWT, async (req: any, res) => {
+  const userId = req.user.userId;
+
+  const user = await db.query.users.findFirst({
+    where: (users, { eq }) => eq(users.id, userId),
+    columns: {
+      password: false,
+    },
+  });
+
+  res.json(user);
+});
+
+/**
+ * 📦 ORDERS
+ */
+router.get("/orders", authJWT, async (req: any, res) => {
+  const userId = req.user.userId;
+
+  const data = await db.query.orders.findMany({
+    where: (orders, { eq }) => eq(orders.userId, userId),
+    orderBy: (orders, { desc }) => [desc(orders.createdAt)],
+  });
+
+  res.json(data);
+});
+
+/**
+ * ❤️ WISHLIST
+ */
+router.get("/wishlist", authJWT, async (req: any, res) => {
+  const userId = req.user.userId;
+
+  const data = await db.query.wishlist.findMany({
+    where: (wishlist, { eq }) => eq(wishlist.userId, userId),
+  });
+
+  res.json(data);
+});
+
+export default router;
+```
+
+---
+
+# 🧿 2. Collectibles System (NFC / Characters Foundation)
+
+## 📁 `schema/collectibles.ts`
+
+```ts id="dash2"
+import { pgTable, uuid, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { users } from "./users";
+import { characters } from "./characters";
+
+export const collectibles = pgTable("collectibles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+
+  characterId: uuid("character_id")
+    .references(() => characters.id, { onDelete: "cascade" })
+    .notNull(),
+
+  scanCount: integer("scan_count").default(1),
+
+  lastScannedAt: timestamp("last_scanned_at", { withTimezone: true }).defaultNow(),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+```
+
+---
+
+# 📁 3. Dashboard Frontend Pages
+
+## 🧭 Route Structure
+
+```txt
+/dashboard
+  ├── /dashboard/page.tsx
+  ├── /dashboard/orders/page.tsx
+  ├── /dashboard/profile/page.tsx
+  ├── /dashboard/wishlist/page.tsx
+  ├── /dashboard/collectibles/page.tsx
+```
+
+---
+
+# 🧠 4. Main Dashboard Page
+
+## 📁 `app/dashboard/page.tsx`
+
+```tsx id="dash3"
+import { useEffect, useState } from "react";
+
+export default function Dashboard() {
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/v2/dashboard/profile", {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    })
+      .then((r) => r.json())
+      .then(setProfile);
+  }, []);
+
+  return (
+    <div className="min-h-screen p-10 bg-gradient-to-br from-stone-100 to-amber-100">
+      <h1 className="text-3xl font-bold">GEN ERA IDENTITY</h1>
+
+      {profile && (
+        <div className="mt-6 glass-card p-6 rounded-xl">
+          <p className="text-xl">Welcome, {profile.name}</p>
+          <p className="text-sm text-gray-600">{profile.email}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+# 📦 5. Orders Page (Timeline Style)
+
+## 📁 `dashboard/orders/page.tsx`
+
+```tsx id="dash4"
+import { useEffect, useState } from "react";
+
+export default function OrdersPage() {
+  const [orders, setOrders] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/v2/dashboard/orders", {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    })
+      .then((r) => r.json())
+      .then(setOrders);
+  }, []);
+
+  return (
+    <div className="p-10">
+      <h2 className="text-2xl font-bold">Your Orders</h2>
+
+      <div className="space-y-4 mt-6">
+        {orders.map((o: any) => (
+          <div key={o.id} className="glass-card p-4 rounded-xl">
+            <p className="font-bold">{o.orderNumber}</p>
+            <p>Status: {o.status}</p>
+            <p>Total: {o.totalAmount}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+# ❤️ 6. Wishlist Page
+
+## 📁 `dashboard/wishlist/page.tsx`
+
+```tsx id="dash5"
+import { useEffect, useState } from "react";
+
+export default function WishlistPage() {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/v2/dashboard/wishlist", {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    })
+      .then((r) => r.json())
+      .then(setItems);
+  }, []);
+
+  return (
+    <div className="p-10">
+      <h2 className="text-2xl font-bold">Wishlist</h2>
+
+      <div className="grid grid-cols-3 gap-4 mt-6">
+        {items.map((item: any) => (
+          <div key={item.id} className="glass-card p-4 rounded-xl">
+            <p>{item.productId}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+# 🧿 7. Collectibles Page (NFC Future Layer)
+
+## 📁 `dashboard/collectibles/page.tsx`
+
+```tsx id="dash6"
+export default function Collectibles() {
+  return (
+    <div className="p-10">
+      <h2 className="text-2xl font-bold">GEN ERA Collectibles</h2>
+
+      <div className="mt-6 glass-card p-6 rounded-xl">
+        <p>🧿 NFC Characters System</p>
+        <p className="text-sm text-gray-600">
+          Scan your physical figure to unlock digital identity
+        </p>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+# 🧠 8. Architecture Flow
+
+```id="dash7"
+Login
+  ↓
+JWT stored
+  ↓
+Dashboard loads
+  ↓
+Profile + Orders + Wishlist + Collectibles
+  ↓
+Identity Layer Activated
+```
+
+---
+
+# 🔥 9. ماذا أصبح النظام الآن؟
+
+## قبل:
+
+* متجر فقط 🛒
+* مستخدمين بدون هوية
+
+## بعد Step 5:
+
+* 👤 User Identity System
+* 📦 Order History Timeline
+* ❤️ Wishlist Cloud
+* 🧿 Collectibles (NFC Ready)
+* 🧠 Foundation للـ AR + Characters
+
+---
+
+# 🚀 أهم نقطة
+
+أنت الآن بنيت:
+
+> **"Digital Civilization Layer" داخل المتجر**
+
+---
+
+# 🧭 الخطوة التالية (Step 6)
+
+هنبدأ أخطر مرحلة:
+
+## 🧠 Character System + Temple Layer Integration
+
+* ANKHRON / OSYRON fully active
+* Temple homepage becomes interactive world
+* products become statues
+* AR linking starts
+* NFC scan → unlock character
+
+---
+
+# 👉 لو جاهز نكمل
+
+اكتب فقط:
+
+> "Step 6"
+
+وأبدأ لك بناء **العالم الثلاثي الأبعاد الكامل (GEN ERA Universe Core)**.
