@@ -1,0 +1,401 @@
+إذا اخترت **🥇 OPTION 1 (ENGINEERING PATH)** فـ **Step 8** لا يجب أن يكون مجرد إضافة تماثيل منتجات بشكل عشوائي.
+
+بما أن مشروع GEN ERA أصبح يحتوي بالفعل على:
+
+* ✅ PostgreSQL + Drizzle
+* ✅ JWT Authentication
+* ✅ Orders System
+* ✅ Stripe Backend
+* ✅ User Dashboard
+* ✅ Admin Dashboard
+* ✅ Zod Validation
+* ✅ Temple Scene 3D
+* ✅ ANKHRON & OSYRON Lore
+
+فالمرحلة التالية يجب أن تكون:
+
+# STEP 8 — Product Statues System (Temple Commerce Layer)
+
+الهدف:
+
+تحويل المتجر من E-Commerce عادي إلى **Temple Commerce Experience**
+
+---
+
+# Architecture
+
+## Temple Layer
+
+```
+TempleScene
+│
+├── ProductPedestal
+│
+├── ProductStatue
+│
+├── ProductHotspot
+│
+├── ProductInfoPanel
+│
+├── ProductPortal
+│
+└── ProductChamber
+```
+
+---
+
+# الملفات الجديدة
+
+## 1
+
+```bash
+src/components/temple/products/
+```
+
+إنشاء:
+
+```bash
+ProductPedestal.tsx
+ProductStatue.tsx
+ProductHotspot.tsx
+ProductInfoPanel.tsx
+ProductPortal.tsx
+ProductChamber.tsx
+```
+
+---
+
+## 2
+
+```bash
+src/hooks/
+```
+
+إنشاء:
+
+```bash
+useTempleProducts.ts
+```
+
+---
+
+## 3
+
+```bash
+src/store/
+```
+
+إنشاء:
+
+```bash
+templeStore.ts
+```
+
+باستخدام:
+
+```bash
+zustand
+```
+
+---
+
+# Flow
+
+## دخول المستخدم
+
+```
+Temple
+```
+
+↓
+
+يرى الأعمدة
+
+↓
+
+يرى المنصات
+
+↓
+
+كل منصة تحمل منتج
+
+↓
+
+Hover
+
+↓
+
+Glow
+
+↓
+
+Click
+
+↓
+
+Camera Focus
+
+↓
+
+Open Chamber
+
+↓
+
+Add To Cart
+
+---
+
+# Product Pedestal
+
+كل منتج يوضع فوق منصة حجرية.
+
+مثال:
+
+```tsx
+<Pedestal>
+  Pharaoh Hoodie
+</Pedestal>
+```
+
+---
+
+# Product Statue
+
+بدلاً من بطاقة منتج:
+
+```tsx
+<ProductCard />
+```
+
+تصبح:
+
+```tsx
+<ProductStatue />
+```
+
+---
+
+مثال:
+
+```tsx
+Black Hoodie
+```
+
+يدور ببطء:
+
+```tsx
+rotation.y += 0.003
+```
+
+---
+
+# Product Hotspots
+
+عند المرور:
+
+يظهر:
+
+```text
+𓂀 PHARAOH HOODIE
+
+Legendary Item
+
+Price: 120$
+```
+
+---
+
+# Product Info Panel
+
+يفتح Panel جانبي.
+
+يحتوي:
+
+```text
+Name
+
+Description
+
+Price
+
+Sizes
+
+Colors
+
+Stock
+
+Add To Cart
+```
+
+---
+
+# Product Chamber
+
+عند الضغط:
+
+الكاميرا تنتقل:
+
+```tsx
+gsap.to(camera.position)
+```
+
+إلى غرفة المنتج.
+
+داخل الغرفة:
+
+```text
+Story
+
+Animation
+
+Product
+
+Variants
+```
+
+---
+
+# Database Integration
+
+يجب منع أي بيانات Mock.
+
+يجب استخدام:
+
+```ts
+/api/v1/products
+```
+
+فقط.
+
+---
+
+# Hook
+
+```ts
+useTempleProducts()
+```
+
+يقوم بـ:
+
+```ts
+fetch products
+```
+
+ثم:
+
+```ts
+cache
+```
+
+ثم:
+
+```ts
+state update
+```
+
+---
+
+# Zustand Store
+
+```ts
+selectedProduct
+
+focusedProduct
+
+isPanelOpen
+
+isChamberOpen
+```
+
+---
+
+# Camera System
+
+إضافة:
+
+```tsx
+CameraController.tsx
+```
+
+وظيفته:
+
+```tsx
+Focus Product
+```
+
+```tsx
+Return To Temple
+```
+
+---
+
+# Performance
+
+مطلوب:
+
+### Frustum Culling
+
+### Lazy Loading
+
+### Suspense
+
+### Memoization
+
+### Instancing
+
+لأن المشروع سيكبر لاحقًا.
+
+---
+
+# ANKHRON Integration
+
+عند أول منتج:
+
+يظهر:
+
+> "This artifact belongs to the Archive of ANKHRON"
+
+---
+
+# OSYRON Integration
+
+للمنتجات النارية:
+
+> "Forged within the Flame Protocol of OSYRON"
+
+---
+
+# النتيجة النهائية
+
+بعد Step 8 يصبح GEN ERA:
+
+❌ متجر ملابس عادي
+
+✅ عالم ثلاثي الأبعاد تفاعلي
+
+✅ المنتجات داخل معبد
+
+✅ تنقل بالكاميرا
+
+✅ غرف خاصة لكل منتج
+
+✅ جاهز للـ Collectibles
+
+✅ جاهز للـ NFC
+
+✅ جاهز للـ AR Portal
+
+---
+
+**التنفيذ الأفضل الآن:**
+
+1. إنشاء `templeStore`
+2. إنشاء `useTempleProducts`
+3. إنشاء `ProductPedestal`
+4. إنشاء `ProductStatue`
+5. ربط المنتجات الحقيقية من API
+6. إضافة Camera Controller
+7. إنشاء Product Chamber
+8. ربط Add To Cart من داخل المعبد
+
+بهذا الترتيب تبني طبقة الـ Temple Commerce بشكل نظيف وقابل للتوسع دون كسر أي جزء من النظام الحالي.

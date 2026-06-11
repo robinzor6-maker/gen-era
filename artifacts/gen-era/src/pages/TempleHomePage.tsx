@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { AudioProvider, useAudio } from "@/lib/audio/AudioContext";
 import TempleScene from "@/components/temple/TempleScene";
 import TempleNav from "@/components/temple/TempleNav";
+import ProductInfoPanel from "@/components/temple/products/ProductInfoPanel";
 
 function checkWebGL(): boolean {
   try {
@@ -86,8 +87,12 @@ function TempleContent() {
         />
       </motion.div>
 
+      {/* Temple Commerce Layer — Product Info Panel */}
+      <ProductInfoPanel />
+
       <TempleNav onAudioToggle={handleAudioToggle} />
 
+      {/* CRT scanline overlay */}
       <div style={{
         position: "fixed",
         inset: 0,
@@ -96,6 +101,7 @@ function TempleContent() {
         background: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.012) 3px, rgba(0,0,0,0.012) 4px)",
       }} />
 
+      {/* Vignette */}
       <div style={{
         position: "fixed",
         inset: 0,

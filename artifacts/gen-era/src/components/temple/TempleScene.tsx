@@ -1,4 +1,4 @@
-import { Suspense, useMemo } from "react";
+import { Suspense, useRef, useMemo, type RefObject } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -7,6 +7,10 @@ import VoidCore from "./VoidCore";
 import TempleParticles from "./TempleParticles";
 import TempleHotspot, { HotspotData } from "./TempleHotspot";
 import HotspotPanel from "./HotspotPanel";
+import ProductPedestal from "./products/ProductPedestal";
+import EmptyPedestal from "./products/EmptyPedestal";
+import CameraController from "./products/CameraController";
+import { useTempleProducts } from "@/hooks/useTempleProducts";
 
 const HOTSPOTS: HotspotData[] = [
   {
@@ -61,6 +65,19 @@ const HOTSPOTS: HotspotData[] = [
   },
 ];
 
+// Product pedestal positions — placed between pillars, away from hotspots
+const PEDESTAL_POSITIONS: [number, number, number][] = [
+  [-4, 0, 7],
+  [0, 0, 8],
+  [4, 0, 7],
+  [-7.5, 0, 2.5],
+  [7.5, 0, 2.5],
+  [-7.5, 0, -2.5],
+  [7.5, 0, -2.5],
+  [-3.5, 0, -7],
+  [3.5, 0, -7],
+];
+
 function SceneLights() {
   return (
     <>
@@ -90,12 +107,32 @@ function LoadingFallback() {
   );
 }
 
+function TempleProducts({ controlsRef }: { controlsRef: RefObject<any> }) {
+  const { products } = useTempleProducts();
+
+  return (
+    <>
+      <CameraController controlsRef={controlsRef} />
+      {PEDESTAL_POSITIONS.map((pos, i) => {
+        const product = products[i];
+        return product ? (
+          <ProductPedestal key={product._id} product={product} position={pos} index={i} />
+        ) : (
+          <EmptyPedestal key={`empty-${i}`} position={pos} index={i} />
+        );
+      })}
+    </>
+  );
+}
+
 interface TempleSceneProps {
   openHotspotId: string | null;
   onHotspotOpen: (id: string) => void;
 }
 
 export default function TempleScene({ openHotspotId, onHotspotOpen }: TempleSceneProps) {
+  const controlsRef = useRef<any>(null);
+
   const openHotspot = useMemo(
     () => HOTSPOTS.find(h => h.id === openHotspotId) ?? null,
     [openHotspotId]
@@ -131,9 +168,12 @@ export default function TempleScene({ openHotspotId, onHotspotOpen }: TempleScen
               isOpen={openHotspotId === h.id}
             />
           ))}
+
+          <TempleProducts controlsRef={controlsRef} />
         </Suspense>
 
         <OrbitControls
+          ref={controlsRef}
           enablePan={false}
           enableDamping
           dampingFactor={0.055}
@@ -156,4 +196,3 @@ export default function TempleScene({ openHotspotId, onHotspotOpen }: TempleScen
   );
 }
 
-export { HOTSPOTS };
