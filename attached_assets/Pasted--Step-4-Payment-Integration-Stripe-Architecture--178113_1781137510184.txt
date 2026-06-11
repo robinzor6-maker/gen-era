@@ -1,0 +1,356 @@
+تمام — نبدأ **Step 4: Payment Integration (Stripe Architecture)** 👇
+وده أخطر وأهم مرحلة في كل مشروع E-commerce لأنه اللي بيحوّل المشروع من “Orders system” إلى **حقيقي قابل للدفع الفعلي**.
+
+---
+
+# 💳 STEP 4 — PAYMENT INTEGRATION (GEN ERA)
+
+## 🎯 الهدف
+
+تحويل النظام من:
+
+❌ Orders = مجرد بيانات
+❌ paymentStatus = "unpaid" دائمًا
+❌ لا يوجد تحقق مالي
+
+إلى:
+
+✅ Stripe Payment Intent Flow
+✅ Webhooks للتحقق الحقيقي
+✅ Order confirmation بعد الدفع فقط
+✅ حماية ضد التلاعب في السعر
+
+---
+
+# 🧠 ARCHITECTURE النهائية
+
+```txt id="stripe_flow"
+CLIENT
+  │
+  ├── Create Order Intent
+  │        ↓
+  │   POST /payments/create-intent
+  │
+  │   SERVER → Stripe
+  │        ↓
+  │   PaymentIntent + clientSecret
+  │
+  ├── Stripe Checkout (frontend)
+  │
+  ├── payment success
+  │
+  ├── webhook (server verify)
+  │
+  └── order marked as PAID
+```
+
+---
+
+# 🚨 المشكلة اللي بنحلها
+
+## ❌ قبل Step 4:
+
+* أي طلب يتسجل حتى بدون دفع
+* ممكن user يزوّر payment status
+* مفيش تحقق مالي حقيقي
+* النظام مش جاهز للإنتاج
+
+---
+
+# 🧱 1. DATABASE UPDATE
+
+## 📁 تعديل orders.ts
+
+```ts id="order_payment_schema"
+paymentStatus: text("payment_status").default("unpaid"), // unpaid | paid | failed
+paymentIntentId: text("payment_intent_id"),
+currency: text("currency").default("usd"),
+```
+
+---
+
+# 🔐 2. STRIPE SERVICE
+
+## 📁 جديد:
+
+`services/paymentService.ts`
+
+```ts id="stripe_service"
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+});
+
+export class PaymentService {
+
+  static async createPaymentIntent(amount: number, orderId: string) {
+    return await stripe.paymentIntents.create({
+      amount: amount * 100, // cents
+      currency: "usd",
+      metadata: {
+        orderId,
+      },
+    });
+  }
+
+  static async verifyWebhook(rawBody: Buffer, signature: string) {
+    return stripe.webhooks.constructEvent(
+      rawBody,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
+  }
+}
+```
+
+---
+
+# 💰 3. PAYMENT ROUTES
+
+## 📁 جديد:
+
+`routes/payments.ts`
+
+```ts id="payment_routes"
+import express from "express";
+import { PaymentService } from "../services/paymentService";
+import { db } from "@workspace/db";
+import { orders } from "@workspace/db/schema/orders";
+import { eq } from "drizzle-orm";
+
+const router = express.Router();
+```
+
+---
+
+## 🔥 CREATE PAYMENT INTENT
+
+```ts id="create_intent"
+router.post("/create-intent", async (req, res) => {
+  const { orderId } = req.body;
+
+  const order = await db.query.orders.findFirst({
+    where: (o, { eq }) => eq(o.id, orderId),
+  });
+
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  const intent = await PaymentService.createPaymentIntent(
+    order.totalAmount,
+    order.id
+  );
+
+  await db
+    .update(orders)
+    .set({
+      paymentIntentId: intent.id,
+    })
+    .where(eq(orders.id, order.id));
+
+  res.json({
+    clientSecret: intent.client_secret,
+  });
+});
+```
+
+---
+
+# 🌐 4. WEBHOOK (CRITICAL)
+
+## 📁 جديد:
+
+`routes/webhooks.ts`
+
+```ts id="webhook_route"
+import express from "express";
+import { PaymentService } from "../services/paymentService";
+import { db } from "@workspace/db";
+import { orders } from "@workspace/db/schema/orders";
+import { eq } from "drizzle-orm";
+
+const router = express.Router();
+
+router.post("/stripe", express.raw({ type: "application/json" }), async (req, res) => {
+  const signature = req.headers["stripe-signature"] as string;
+
+  let event;
+
+  try {
+    event = PaymentService.verifyWebhook(req.body, signature);
+  } catch (err) {
+    return res.status(400).send("Webhook Error");
+  }
+
+  if (event.type === "payment_intent.succeeded") {
+    const paymentIntent = event.data.object as any;
+
+    const orderId = paymentIntent.metadata.orderId;
+
+    await db
+      .update(orders)
+      .set({
+        paymentStatus: "paid",
+      })
+      .where(eq(orders.id, orderId));
+  }
+
+  res.json({ received: true });
+});
+
+export default router;
+```
+
+---
+
+# 🧠 5. FRONTEND FLOW (مهم جداً)
+
+## بعد إنشاء الطلب:
+
+```ts id="frontend_flow"
+1. POST /orders → returns orderId
+
+2. POST /payments/create-intent
+
+3. Stripe.confirmCardPayment(clientSecret)
+
+4. لو success → order confirmed
+```
+
+---
+
+# 🔐 6. SECURITY FIXES
+
+## لازم نمنع ده:
+
+### ❌ المستخدم يغير السعر
+
+✔ السعر كله من السيرفر فقط
+
+### ❌ المستخدم يعمل order بدون دفع
+
+✔ order يبقى pending until webhook
+
+### ❌ تزوير payment
+
+✔ webhook verification فقط
+
+---
+
+# 🧠 ORDER STATES الجديدة
+
+```txt id="order_states"
+pending   → created but not paid
+paid      → confirmed by Stripe
+failed    → payment failed
+```
+
+---
+
+# 🚀 RESULT AFTER STEP 4
+
+## 💳 SYSTEM NOW:
+
+### 🟢 Payment:
+
+* Stripe fully integrated
+* Secure payment verification
+* No fake orders
+
+### 🧠 Architecture:
+
+* Event-driven (webhooks)
+* PaymentIntent flow
+* Metadata linking orders
+
+### 🏢 Production level:
+
+* Shopify / Amazon checkout structure
+* Real money ready system
+
+---
+
+# ⚡ COPY-PASTE MASTER PROMPT (REPLIT / ANTIGRAVITY)
+
+```text id="stripe_prompt"
+Implement Stripe payment integration for GEN ERA backend.
+
+Requirements:
+
+1. Add payment fields to orders:
+   - paymentStatus (unpaid | paid | failed)
+   - paymentIntentId
+   - currency
+
+2. Create PaymentService:
+   - createPaymentIntent(amount, orderId)
+   - verifyWebhook(rawBody, signature)
+
+3. Create endpoint:
+   POST /payments/create-intent
+   - fetch order from DB
+   - create Stripe PaymentIntent
+   - store paymentIntentId in order
+   - return clientSecret
+
+4. Create Stripe webhook endpoint:
+   POST /webhooks/stripe
+   - verify Stripe signature
+   - on payment_intent.succeeded:
+     - update order.paymentStatus = "paid"
+
+5. Ensure:
+   - no client-side price control
+   - all payment validation is server-side only
+   - webhook is the source of truth
+   - TypeScript strict mode compliance
+
+Goal: production-grade Stripe payment system (Shopify-level checkout architecture).
+```
+
+---
+
+# 🧭 الخطوة اللي بعدها (مهم جداً)
+
+بعد Step 4 عندك 3 مسارات:
+
+## 👉 Step 5 (ضروري):
+
+🧑‍💼 Admin Dashboard
+
+* إدارة الطلبات
+* تغيير status
+* إدارة stock
+* users control
+
+---
+
+## 👉 Step 6 (Gen ERA core):
+
+🏛 Temple Layer UX
+
+* statues system
+* product try-on
+* cinematic world
+
+---
+
+# ⚠️ تقييمك الحالي
+
+أنت الآن وصلت إلى:
+
+> 🟢 **E-commerce Core = 85% Production Ready**
+
+اللي باقي:
+
+* الإدارة
+* التجربة البصرية
+* polish
+
+---
+
+لو جاهز نكمل المستوى الأعلى:
+
+> "ابدأ Step 5"
+
+وهندخل على Admin System زي Shopify Dashboard 👌
