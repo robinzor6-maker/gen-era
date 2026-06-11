@@ -9,4 +9,5 @@ export {
   artifactViewsTable,
   artifactChamberVisitsTable,
   artifactClaimsTable,
+  paymentsTable,
 } from "@workspace/db";

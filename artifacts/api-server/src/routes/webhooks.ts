@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { eq } from "drizzle-orm";
-import { db, ordersTable } from "../lib/db.js";
+import { db, ordersTable, paymentsTable } from "../lib/db.js";
 import { getPaymentProvider } from "../services/PaymentFactory.js";
 import { logger } from "../lib/logger.js";
 
@@ -10,17 +10,13 @@ async function applyWebhookResult(
   orderId: string,
   status: "paid" | "failed",
   transactionId: string,
-  provider: string
+  provider: "stripe" | "paymob",
+  rawResponse?: unknown
 ) {
   if (status === "paid") {
     await db
       .update(ordersTable)
-      .set({
-        paymentStatus: "paid",
-        orderStatus: "processing",
-        paymentRef: transactionId,
-        updatedAt: new Date(),
-      })
+      .set({ paymentStatus: "paid", orderStatus: "processing", paymentRef: transactionId, updatedAt: new Date() })
       .where(eq(ordersTable.id, orderId));
     logger.info({ orderId, transactionId, provider }, "Order marked paid via webhook");
   } else {
@@ -30,10 +26,18 @@ async function applyWebhookResult(
       .where(eq(ordersTable.id, orderId));
     logger.info({ orderId, provider }, "Order payment failed via webhook");
   }
+
+  await db.insert(paymentsTable).values({
+    orderId,
+    provider,
+    status: status === "paid" ? "success" : "failed",
+    amount: 0,
+    transactionId,
+    rawResponse: rawResponse as any ?? null,
+  }).onConflictDoNothing();
 }
 
 // ── POST /api/v1/webhooks/stripe ─────────────────────────────────────────────
-// Receives raw body (mounted with express.raw() in app.ts before express.json()).
 router.post("/stripe", async (req: Request, res: Response) => {
   const signature = req.headers["stripe-signature"] as string | undefined;
 
@@ -58,7 +62,7 @@ router.post("/stripe", async (req: Request, res: Response) => {
   }
 
   try {
-    await applyWebhookResult(result.orderId, result.status, result.transactionId, "stripe");
+    await applyWebhookResult(result.orderId, result.status, result.transactionId, "stripe", result);
   } catch (err) {
     logger.error(err, "Stripe webhook handler error");
     res.status(500).json({ success: false, message: "Webhook processing failed." });
@@ -69,7 +73,6 @@ router.post("/stripe", async (req: Request, res: Response) => {
 });
 
 // ── POST /api/v1/webhooks/paymob ─────────────────────────────────────────────
-// Paymob sends JSON body with HMAC in the `hmac` query param.
 router.post("/paymob", async (req: Request, res: Response) => {
   const hmac = req.query["hmac"] as string | undefined;
 
@@ -90,7 +93,7 @@ router.post("/paymob", async (req: Request, res: Response) => {
   }
 
   try {
-    await applyWebhookResult(result.orderId, result.status, result.transactionId, "paymob");
+    await applyWebhookResult(result.orderId, result.status, result.transactionId, "paymob", req.body);
   } catch (err) {
     logger.error(err, "Paymob webhook handler error");
     res.status(500).json({ success: false, message: "Webhook processing failed." });

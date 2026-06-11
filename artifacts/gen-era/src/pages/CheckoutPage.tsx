@@ -1,17 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { useCartStore } from '@/lib/store';
 import { useAuth } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { Order, OrderResponse } from '@/lib/types';
+import StripePaymentForm from '@/components/checkout/StripePaymentForm';
 
 function formatPrice(price: number): string {
   return price.toLocaleString('ar-EG') + ' ج.م';
 }
 
+type Step = 'shipping' | 'payment' | 'success';
+
+interface PaymentSession {
+  provider: 'stripe' | 'paymob' | 'cod';
+  orderId: string;
+  orderNumber: string;
+  clientSecret?: string;
+  redirectUrl?: string;
+  amount?: number;
+  currency?: string;
+}
+
 export default function CheckoutPage() {
   const { items, cartTotal, clearCart } = useCartStore();
   const { isAuthenticated, user } = useAuth();
+  const [, navigate] = useLocation();
+
+  const [step, setStep] = useState<Step>('shipping');
 
   const [fullName, setFullName] = useState('');
   const [email,    setEmail]    = useState('');
@@ -23,7 +39,10 @@ export default function CheckoutPage() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [loading,         setLoading]         = useState(false);
   const [error,           setError]           = useState<string | null>(null);
+
   const [successOrder,    setSuccessOrder]    = useState<Order | null>(null);
+  const [paymentSession,  setPaymentSession]  = useState<PaymentSession | null>(null);
+  const [paymentError,    setPaymentError]    = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -32,7 +51,8 @@ export default function CheckoutPage() {
     }
   }, [user]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // ── Step 1: Submit shipping → create order → initiate payment ────────────
+  const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
     setError(null);
@@ -41,17 +61,15 @@ export default function CheckoutPage() {
       setValidationError('All fields except notes are required.');
       return;
     }
-
     if (items.length === 0) {
       setValidationError('Your cart is empty.');
       return;
     }
-
     if (loading) return;
     setLoading(true);
 
     try {
-      const payload = {
+      const orderRes = await api.post<OrderResponse>('/orders', {
         customer: {
           name:    fullName.trim(),
           email:   email.trim().toLowerCase(),
@@ -59,30 +77,68 @@ export default function CheckoutPage() {
           address: address.trim(),
           city:    city.trim(),
         },
-        items: items.map((i) => ({
-          productId: i.productId,
-          quantity:  i.quantity,
-        })),
+        items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
         notes: notes.trim(),
-      };
+      });
 
-      const res = await api.post<OrderResponse>('/orders', payload);
-
-      if (res.success) {
-        setSuccessOrder(res.data);
-        clearCart();
-      } else {
-        throw new Error('Failed to submit order. Please try again.');
+      if (!orderRes.success) {
+        throw new Error('Failed to create order. Please try again.');
       }
+
+      const orderId = orderRes.data._id;
+
+      const payRes = await api.post<{ success: boolean; data: PaymentSession }>(
+        '/payments/initiate',
+        { orderId, country: isEgyptCity(city.trim()) ? 'EG' : undefined }
+      );
+
+      if (!payRes.success) {
+        throw new Error('Failed to initiate payment. Please try again.');
+      }
+
+      const session = payRes.data;
+      setPaymentSession(session);
+
+      if (session.provider === 'cod') {
+        setSuccessOrder(orderRes.data);
+        clearCart();
+        setStep('success');
+        return;
+      }
+
+      if (session.provider === 'paymob' && session.redirectUrl) {
+        clearCart();
+        window.location.href = session.redirectUrl;
+        return;
+      }
+
+      if (session.provider === 'stripe' && session.clientSecret) {
+        clearCart();
+        setStep('payment');
+        return;
+      }
+
+      setSuccessOrder(orderRes.data);
+      clearCart();
+      setStep('success');
     } catch (err: unknown) {
-      // @ts-ignore
-      setError(err.message || 'An unexpected error occurred.');
+      setError((err as Error).message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (successOrder) {
+  // ── Step 2: Stripe payment confirmed ─────────────────────────────────────
+  const handleStripeSuccess = () => {
+    setStep('success');
+  };
+
+  const handleStripeError = (msg: string) => {
+    setPaymentError(msg);
+  };
+
+  // ── Render: Success ───────────────────────────────────────────────────────
+  if (step === 'success') {
     return (
       <main className="product-detail-page success-page animate-fade-up" style={{ paddingBottom: '120px' }}>
         <header className="store-header">
@@ -102,14 +158,21 @@ export default function CheckoutPage() {
           <span className="empty-glyph font-display" style={{ color: 'var(--green-neon)', textShadow: '0 0 10px rgba(0, 255, 136, 0.3)' }}>𓋹</span>
           <h2 className="font-cinzel" style={{ color: 'var(--green-neon)', letterSpacing: '0.1em' }}>ORDER RECORDED</h2>
 
-          <div className="font-mono text-muted" style={{ margin: '20px 0', fontSize: '0.85rem', lineHeight: '1.8', textAlign: 'left', borderTop: '1px solid var(--border-thin)', borderBottom: '1px solid var(--border-thin)', padding: '16px 0' }}>
-            <div><strong style={{ color: 'var(--sand)' }}>ORDER №:</strong> {successOrder.orderNumber}</div>
-            <div><strong style={{ color: 'var(--sand)' }}>ACQUISITOR:</strong> {successOrder.customer?.name}</div>
-            <div><strong style={{ color: 'var(--sand)' }}>DESTINATION:</strong> {successOrder.customer?.address}, {successOrder.customer?.city}</div>
-            <div><strong style={{ color: 'var(--sand)' }}>TOTAL COST:</strong> {formatPrice(successOrder.totalPrice)}</div>
-            <div><strong style={{ color: 'var(--sand)' }}>TYPE:</strong> <span className="status-in-stock">{successOrder.customerType.toUpperCase()}</span></div>
-            <div><strong style={{ color: 'var(--sand)' }}>STATUS:</strong> <span className="status-in-stock">{successOrder.status.toUpperCase()}</span></div>
-          </div>
+          {successOrder && (
+            <div className="font-mono text-muted" style={{ margin: '20px 0', fontSize: '0.85rem', lineHeight: '1.8', textAlign: 'left', borderTop: '1px solid var(--border-thin)', borderBottom: '1px solid var(--border-thin)', padding: '16px 0' }}>
+              <div><strong style={{ color: 'var(--sand)' }}>ORDER №:</strong> {successOrder.orderNumber}</div>
+              <div><strong style={{ color: 'var(--sand)' }}>ACQUISITOR:</strong> {successOrder.customer?.name}</div>
+              <div><strong style={{ color: 'var(--sand)' }}>DESTINATION:</strong> {successOrder.customer?.address}, {successOrder.customer?.city}</div>
+              <div><strong style={{ color: 'var(--sand)' }}>TOTAL COST:</strong> {formatPrice(successOrder.totalPrice)}</div>
+              <div><strong style={{ color: 'var(--sand)' }}>STATUS:</strong> <span className="status-in-stock">{successOrder.status.toUpperCase()}</span></div>
+            </div>
+          )}
+
+          {paymentSession?.provider === 'cod' && (
+            <div className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--sand2)', background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.15)', padding: '10px 14px', marginBottom: '20px' }}>
+              𓂀 PAY ON DELIVERY — Our team will contact you to confirm.
+            </div>
+          )}
 
           <Link href="/store" className="btn-fire" style={{ padding: '12px 28px', textDecoration: 'none', display: 'inline-block' }}>
             RETURN TO ARCHIVE ⚡
@@ -119,6 +182,66 @@ export default function CheckoutPage() {
     );
   }
 
+  // ── Render: Stripe Payment Step ───────────────────────────────────────────
+  if (step === 'payment' && paymentSession?.clientSecret) {
+    return (
+      <main className="product-detail-page animate-fade-up" style={{ paddingBottom: '120px' }}>
+        <header className="store-header">
+          <div className="store-header-inner">
+            <button className="back-link font-mono" style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setStep('shipping')}>
+              ← BACK
+            </button>
+            <div className="store-title-wrap">
+              <span className="label store-eyebrow">GEN ERA — PAYMENT PROTOCOL</span>
+              <h1 className="store-title font-display">PAYMENT</h1>
+            </div>
+            <div style={{ width: '40px' }} />
+          </div>
+        </header>
+
+        <div style={{ maxWidth: '520px', margin: '40px auto', padding: '0 20px' }}>
+          <div className="visual-panel" style={{ padding: '30px', position: 'relative' }}>
+            <span className="corner-mark tl" /><span className="corner-mark tr" />
+            <span className="corner-mark bl" /><span className="corner-mark br" />
+
+            <div className="font-mono" style={{ fontSize: '0.7rem', letterSpacing: '0.3em', color: 'var(--sand2)', marginBottom: '6px' }}>
+              ORDER №: {paymentSession.orderNumber}
+            </div>
+            <div className="font-display text-glow-gold" style={{ fontSize: '1.6rem', marginBottom: '24px', color: 'var(--sand2)' }}>
+              {formatPrice(paymentSession.amount ?? cartTotal)}
+            </div>
+
+            {paymentError && (
+              <div className="validation-error font-mono" style={{ borderColor: 'var(--red-live)', color: 'var(--red-live)', background: 'rgba(204,17,17,0.05)', marginBottom: '16px' }}>
+                {paymentError}
+              </div>
+            )}
+
+            <StripePaymentForm
+              clientSecret={paymentSession.clientSecret}
+              accent="var(--sand)"
+              onSuccess={handleStripeSuccess}
+              onError={handleStripeError}
+            />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // ── Render: Paymob redirect loading ──────────────────────────────────────
+  if (loading && city && isEgyptCity(city)) {
+    return (
+      <main className="product-detail-page animate-fade-up" style={{ paddingBottom: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="font-display text-glow-gold" style={{ fontSize: '2rem', marginBottom: '16px' }}>⚡</div>
+          <div className="font-mono" style={{ letterSpacing: '0.3em', color: 'var(--sand2)' }}>REDIRECTING TO PAYMENT...</div>
+        </div>
+      </main>
+    );
+  }
+
+  // ── Render: Shipping Form (Step 1) ────────────────────────────────────────
   return (
     <main className="product-detail-page checkout-route-page animate-fade-up">
       <header className="store-header">
@@ -143,8 +266,9 @@ export default function CheckoutPage() {
         </div>
       ) : (
         <div className="detail-container checkout-grid">
+          {/* ── Shipping Form ── */}
           <div className="detail-visual-col">
-            <form id="checkout-form" onSubmit={handleSubmit} className="visual-panel checkout-form-panel" style={{ padding: '30px', gap: '20px' }}>
+            <form id="checkout-form" onSubmit={handleShippingSubmit} className="visual-panel checkout-form-panel" style={{ padding: '30px', gap: '20px' }}>
               <span className="corner-mark tl" aria-hidden="true" />
               <span className="corner-mark tr" aria-hidden="true" />
               <span className="corner-mark bl" aria-hidden="true" />
@@ -208,6 +332,7 @@ export default function CheckoutPage() {
             </form>
           </div>
 
+          {/* ── Order Summary ── */}
           <div className="detail-info-col">
             <div className="visual-panel checkout-summary-panel" style={{ padding: '30px', display: 'flex', flexDirection: 'column' }}>
               <span className="corner-mark tl" aria-hidden="true" />
@@ -224,7 +349,11 @@ export default function CheckoutPage() {
                   <div key={item.productId} className="checkout-item-summary-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border-thin)' }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span className="font-cinzel" style={{ fontSize: '0.85rem', color: '#fff' }}>{item.name}</span>
-                      <span className="font-mono text-muted" style={{ fontSize: '0.75rem' }}>QTY: {item.quantity} × {formatPrice(item.price)}</span>
+                      <span className="font-mono text-muted" style={{ fontSize: '0.75rem' }}>
+                        QTY: {item.quantity} × {formatPrice(item.price)}
+                        {item.selectedSize && <span style={{ marginLeft: 8, color: 'var(--sand2)' }}>· {item.selectedSize}</span>}
+                        {item.selectedColor && <span style={{ marginLeft: 8, color: 'var(--sand2)' }}>· {item.selectedColor}</span>}
+                      </span>
                     </div>
                     <span className="font-mono" style={{ fontSize: '0.85rem', color: 'var(--sand2)' }}>{formatPrice(item.price * item.quantity)}</span>
                   </div>
@@ -253,7 +382,7 @@ export default function CheckoutPage() {
                   style={{ width: '100%', padding: '18px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
                   disabled={loading}
                 >
-                  {loading ? 'PROCESSING TRANSACTION...' : 'CONFIRM ORDER ⚡'}
+                  {loading ? 'PROCESSING TRANSACTION...' : 'CONTINUE TO PAYMENT ⚡'}
                 </button>
               </div>
             </div>
@@ -262,4 +391,17 @@ export default function CheckoutPage() {
       )}
     </main>
   );
+}
+
+const EGYPT_CITIES = [
+  'cairo', 'giza', 'alexandria', 'shubra', 'port said', 'suez', 'luxor',
+  'mansoura', 'tanta', 'asyut', 'ismailia', 'faiyum', 'zagazig', 'aswan',
+  'damietta', 'damanhur', 'minya', 'beni suef', 'hurghada', 'qena', 'sohag',
+  'shibin', 'banha', 'arish', 'maadi', 'heliopolis', 'nasr city', 'dokki',
+  'mohandessin', 'zamalek', 'october', 'rehab', 'new cairo', 'sheikh zayed',
+];
+
+function isEgyptCity(city: string): boolean {
+  const lower = city.toLowerCase().trim();
+  return EGYPT_CITIES.some((c) => lower.includes(c));
 }

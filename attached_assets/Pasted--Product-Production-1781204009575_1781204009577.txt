@@ -1,0 +1,308 @@
+تمام — هننفّذ المرحلة الجاية كأننا بنحوّل المشروع فعلًا إلى **Product عالمي قابل للإطلاق (Production-grade Commerce System)**.
+
+هنا مش كلام تنظير… ده **تصميم + تنفيذ هيكل جاهز يتبني عليه مباشرة داخل مشروعك**.
+
+---
+
+# 🚀 PHASE 2 — GEN ERA COMMERCE CORE (Production Layer)
+
+## 🎯 الهدف
+
+تحويل النظام من:
+
+> 3D Experience + API
+
+إلى:
+
+> Full E-commerce Engine (Purchase + Payment + Orders + Tracking)
+
+---
+
+# 1. 🧠 العمود الفقري الجديد (Architecture Layer)
+
+هنضيف 4 أنظمة رئيسية:
+
+### ① Cart System
+
+### ② Order Lifecycle System
+
+### ③ Payment Router (Stripe / Paymob)
+
+### ④ Checkout Orchestrator (المخّ اللي بيربط كل حاجة)
+
+---
+
+# 2. 🧾 DATABASE DESIGN (أساس كل حاجة)
+
+## 📦 Orders Table (مهم جدًا)
+
+```ts
+orders {
+  id: string
+  userId: string
+
+  status: 
+    | "CREATED"
+    | "PENDING_PAYMENT"
+    | "PAID"
+    | "FAILED"
+    | "SHIPPED"
+    | "DELIVERED"
+
+  totalAmount: number
+  currency: "EGP" | "USD"
+
+  paymentProvider: "stripe" | "paymob"
+
+  paymentRef: string | null
+
+  createdAt: Date
+  updatedAt: Date
+}
+```
+
+---
+
+## 🛒 Order Items
+
+```ts
+order_items {
+  id: string
+  orderId: string
+  productId: string
+
+  quantity: number
+  price: number
+}
+```
+
+---
+
+## 💳 Payments Log (مهم للتتبع)
+
+```ts
+payments {
+  id: string
+  orderId: string
+
+  provider: "stripe" | "paymob"
+  status: "INITIATED" | "SUCCESS" | "FAILED"
+
+  amount: number
+  transactionId: string
+
+  rawResponse: json
+}
+```
+
+---
+
+# 3. ⚡ PAYMENT ROUTER (أهم جزء)
+
+بدل ما تختار Stripe أو Paymob في كل مكان…
+
+هنعمل **طبقة ذكية واحدة**
+
+---
+
+## 📁 `payment/PaymentRouter.ts`
+
+```ts
+export class PaymentRouter {
+  static async createPayment(order, userLocation) {
+    
+    const provider = this.selectProvider(userLocation);
+
+    if (provider === "stripe") {
+      return StripeService.createCheckout(order);
+    }
+
+    if (provider === "paymob") {
+      return PaymobService.initiatePayment(order);
+    }
+
+    throw new Error("No payment provider available");
+  }
+
+  static selectProvider(location: string) {
+    // logic:
+    if (location === "EG") return "paymob";
+    return "stripe";
+  }
+}
+```
+
+---
+
+# 4. 🧠 CHECKOUT ORCHESTRATOR (عقل النظام)
+
+## 📁 `checkout/CheckoutService.ts`
+
+```ts
+export class CheckoutService {
+  
+  static async createCheckout(userId, cart) {
+
+    // 1. Create Order
+    const order = await OrderModel.create({
+      userId,
+      status: "CREATED",
+      totalAmount: cart.total,
+    });
+
+    // 2. Add items
+    await OrderItemsModel.insertMany(order.id, cart.items);
+
+    // 3. Move to payment
+    await OrderModel.update(order.id, {
+      status: "PENDING_PAYMENT"
+    });
+
+    // 4. Call payment router
+    const paymentSession = await PaymentRouter.createPayment(order);
+
+    return {
+      order,
+      paymentSession
+    };
+  }
+}
+```
+
+---
+
+# 5. 💳 API ENDPOINTS (Backend)
+
+## 🧾 Checkout
+
+```ts
+POST /api/checkout
+```
+
+### Body:
+
+```json
+{
+  "userId": "123",
+  "cart": {
+    "items": [
+      { "productId": "A1", "quantity": 2 }
+    ],
+    "total": 1999
+  }
+}
+```
+
+---
+
+## 💳 Payment Callback
+
+```ts
+POST /api/payments/webhook
+```
+
+### Logic:
+
+* verify provider signature
+* update payment status
+* update order status → PAID
+
+---
+
+# 6. 🔁 ORDER STATE MACHINE (مهم جدًا)
+
+```text
+CREATED
+  ↓
+PENDING_PAYMENT
+  ↓
+PAID
+  ↓
+SHIPPED
+  ↓
+DELIVERED
+```
+
+أي خلل هنا = النظام التجاري يقع
+
+---
+
+# 7. 🎮 3D → PRODUCT LINK (GEN ERA CORE FEATURE)
+
+ده الجزء اللي بيميزك عن أي e-commerce عادي
+
+## الفكرة:
+
+أي object في 3D scene:
+
+```ts
+onClick(() => {
+  router.push(`/product/${productId}`)
+})
+```
+
+أو:
+
+```ts
+setSelectedProduct(product)
+openProductPanel()
+```
+
+---
+
+# 8. 📊 MINIMAL ANALYTICS (ضروري للمرحلة دي)
+
+```ts
+product_views {
+  productId
+  userId
+  timestamp
+}
+```
+
+```ts
+cart_adds {
+  productId
+  userId
+  timestamp
+}
+```
+
+---
+
+# 🔥 النتيجة بعد تنفيذ المرحلة دي
+
+المشروع يتحول من:
+
+❌ 3D Showcase App
+
+إلى:
+
+✔ Fully Functional Cyberpunk E-commerce Engine
+✔ Payment System جاهز
+✔ Orders Lifecycle شغال
+✔ 3D Shopping Experience حقيقي
+✔ قابل للإطلاق الفعلي
+
+---
+
+# 🚀 الخطوة اللي بعدها مباشرة (لو عايز أكمل معك)
+
+أقدر في المرحلة التالية أبني لك واحد من دول:
+
+### 1. 🔥 Admin Dashboard (تحكم كامل في الطلبات والمنتجات)
+
+### 2. 🎮 3D Shopping Interaction System (احترافي جدًا)
+
+### 3. 📦 Stripe + Paymob full integration code ready-to-deploy
+
+### 4. 📊 Analytics Dashboard (real-time funnel tracking)
+
+---
+
+لو عايز نكمّل صح وبنفس المستوى الاحترافي:
+اكتب لي فقط:
+
+**“نفّذ الـ checkout system داخل الكود”**
+
+وأنا أحوله لك إلى implementation جاهز يتلزق مباشرة في مشروعك بدون كلام زيادة.
