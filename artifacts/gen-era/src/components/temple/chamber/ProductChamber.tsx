@@ -1,34 +1,15 @@
-import { useState, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTempleStore } from '@/stores/templeStore';
 import { useCartStore } from '@/lib/store';
 import ChamberScene from './ChamberScene';
 import ClaimCeremony from '@/components/temple/effects/ClaimCeremony';
+import EntityEntrance from '@/components/entities/EntityEntrance';
+import EntityDialogue from '@/components/entities/EntityDialogue';
+import EntityVoiceLines from '@/components/entities/EntityVoiceLines';
+import { getEntityDialogueLines } from '@/components/entities/useEntityDialogue';
 import { getDistrict, getRarity, RARITY_COLORS, DISTRICT_COLORS, generateLore } from '@/lib/lore/generateLore';
 import { api } from '@/lib/api';
-
-function getEntity(district: string, rarity: string): { name: string; quote: string } {
-  if (district === 'osyron') {
-    return {
-      name: 'OSYRON',
-      quote: rarity === 'legendary'
-        ? '"This flame was never meant to be contained."'
-        : '"Energy is not worn.\nIt is awakened."',
-    };
-  }
-  if (district === 'ankhron') {
-    return {
-      name: 'ANKHRON',
-      quote: rarity === 'legendary'
-        ? '"The Archive selected you before you chose it."'
-        : '"The past does not return.\nIt reveals itself."',
-    };
-  }
-  return {
-    name: 'GEN ERA',
-    quote: '"The Core endures.\nAll else is ephemera."',
-  };
-}
 
 function SceneFallback({ accent }: { accent: string }) {
   return (
@@ -59,17 +40,64 @@ export default function ProductChamber() {
   const [selectedColor, setSelectedColor] = useState<string | undefined>();
   const [added, setAdded] = useState(false);
 
-  const product = selectedProduct;
-  if (!product) return null;
+  // Entity activation state
+  const [entranceActive,  setEntranceActive]  = useState(false);
+  const [entityVisible,   setEntityVisible]   = useState(false);
+  const [entityOpacity,   setEntityOpacity]   = useState(0);
+  const [dialogueVisible, setDialogueVisible] = useState(false);
+  const prevChamberOpen = useRef(false);
 
-  const district    = getDistrict(product);
-  const rarity      = getRarity(product);
+  const product = selectedProduct;
+
+  const district    = product ? getDistrict(product)    : 'gencore' as const;
+  const rarity      = product ? getRarity(product)      : 'rare'    as const;
   const rarityColor = RARITY_COLORS[rarity];
   const accent      = DISTRICT_COLORS[district].primary;
-  const entity      = getEntity(district, rarity);
-  const loreText    = generateLore(product);
+  const loreText    = product ? generateLore(product)   : '';
+
+  const entityName  = district === 'ankhron' ? 'ANKHRON'
+    : district === 'osyron' ? 'OSYRON' : 'GEN ERA';
+
+  const hasEntity   = district === 'ankhron' || district === 'osyron';
+  const dialogueLines = product && hasEntity ? getEntityDialogueLines(product, district, rarity) : [];
+
+  // Trigger entrance when chamber opens
+  useEffect(() => {
+    if (isChamberOpen && !prevChamberOpen.current) {
+      setEntityVisible(false);
+      setEntityOpacity(0);
+      setDialogueVisible(false);
+      if (hasEntity) {
+        setEntranceActive(true);
+      }
+    }
+    if (!isChamberOpen) {
+      setEntranceActive(false);
+      setEntityVisible(false);
+      setEntityOpacity(0);
+      setDialogueVisible(false);
+    }
+    prevChamberOpen.current = isChamberOpen;
+  }, [isChamberOpen, hasEntity]);
+
+  const handleEntityShow = useCallback(() => {
+    setEntityVisible(true);
+    // Fade entity opacity in
+    let op = 0;
+    const interval = setInterval(() => {
+      op = Math.min(op + 0.04, 1);
+      setEntityOpacity(op);
+      if (op >= 1) clearInterval(interval);
+    }, 40);
+  }, []);
+
+  const handleEntranceComplete = useCallback(() => {
+    setEntranceActive(false);
+    setDialogueVisible(true);
+  }, []);
 
   const handleAddToCart = () => {
+    if (!product) return;
     addToCart(product, 1, selectedSize, selectedColor);
     setAdded(true);
     startCeremony(product.name, accent);
@@ -104,9 +132,19 @@ export default function ProductChamber() {
     setAdded(false);
   };
 
+  if (!product) return null;
+
   return (
     <>
-      {/* ─── Claim Ceremony overlay ─────────────────────────────────────────── */}
+      {/* ─── Ambient entity voice (ready for audio files) ────────────────── */}
+      <EntityVoiceLines
+        play={dialogueVisible && hasEntity}
+        volume={0.45}
+        fadeInMs={1200}
+        fadeOutMs={700}
+      />
+
+      {/* ─── Claim Ceremony overlay ──────────────────────────────────────── */}
       <AnimatePresence>
         {isCeremonyActive && (
           <ClaimCeremony
@@ -177,6 +215,20 @@ export default function ProductChamber() {
                     }}>{rarity.toUpperCase()}</span>
                   </>
                 )}
+                {hasEntity && (
+                  <>
+                    <span style={{ color: `${accent}22`, fontSize: '0.5rem' }}>◈</span>
+                    <motion.span
+                      animate={{ opacity: [0.4, 0.8, 0.4] }}
+                      transition={{ repeat: Infinity, duration: 2.5 }}
+                      style={{
+                        fontFamily: "'Share Tech Mono', monospace",
+                        fontSize: '0.35rem', letterSpacing: '0.25em',
+                        color: `${accent}66`,
+                      }}
+                    >{entityName} PRESENT</motion.span>
+                  </>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
@@ -211,42 +263,49 @@ export default function ProductChamber() {
                   borderRight: `1px solid ${accent}14`,
                 }}
               >
-                <Suspense fallback={<SceneFallback accent={accent} />}>
-                  <ChamberScene
-                    productTags={product.tags ?? []}
-                    productName={product.name}
-                    district={district}
-                    rarity={rarity}
+                {/* Entity entrance overlay (inside the 3D panel) */}
+                {hasEntity && (
+                  <EntityEntrance
+                    district={district as 'ankhron' | 'osyron'}
+                    accent={accent}
+                    entityName={entityName}
+                    active={entranceActive}
+                    onEntityShow={handleEntityShow}
+                    onComplete={handleEntranceComplete}
                   />
-                </Suspense>
+                )}
 
-                {/* Entity overlay */}
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.85, duration: 0.5 }}
-                  style={{ position: 'absolute', bottom: 22, left: 26, fontFamily: "'Cinzel', serif", pointerEvents: 'none' }}
-                >
-                  <div style={{
-                    fontSize: '0.38rem', letterSpacing: '0.45em',
-                    color: `${accent}55`, marginBottom: 6,
-                  }}>{entity.name} SPEAKS</div>
-                  <div style={{
-                    fontSize: '0.5rem', color: `${accent}cc`, fontStyle: 'italic',
-                    letterSpacing: '0.05em', lineHeight: 1.65, whiteSpace: 'pre-line',
-                    textShadow: `0 0 18px ${accent}44`,
-                  }}>{entity.quote}</div>
-                </motion.div>
+                {/* 3D Chamber Scene */}
+                <ChamberScene
+                  productTags={product.tags ?? []}
+                  productName={product.name}
+                  district={district}
+                  rarity={rarity}
+                  entityVisible={entityVisible}
+                  entityOpacity={entityOpacity}
+                />
 
-                {/* Rarity aura */}
+                {/* Entity dialogue — typewriter (HTML overlay) */}
+                {hasEntity && (
+                  <EntityDialogue
+                    lines={dialogueLines}
+                    accent={accent}
+                    entityName={entityName}
+                    visible={dialogueVisible}
+                  />
+                )}
+
+                {/* Rarity badge */}
                 {rarity !== 'rare' && (
                   <motion.div
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    transition={{ delay: 1.2 }}
+                    transition={{ delay: hasEntity ? 6.5 : 1.2 }}
                     style={{
                       position: 'absolute', top: 16, left: 16, pointerEvents: 'none',
                       fontFamily: "'Share Tech Mono', monospace",
                       fontSize: '0.36rem', letterSpacing: '0.3em',
                       color: rarityColor, textShadow: `0 0 12px ${rarityColor}`,
+                      zIndex: 15,
                     }}
                   >◈ {rarity.toUpperCase()} CLASS ARTIFACT</motion.div>
                 )}

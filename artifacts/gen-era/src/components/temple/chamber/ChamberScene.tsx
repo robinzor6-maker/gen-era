@@ -4,6 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type { District, Rarity } from '@/lib/lore/generateLore';
 import { DISTRICT_COLORS, RARITY_COLORS } from '@/lib/lore/generateLore';
+import EntityManager from '@/components/entities/EntityManager';
 
 function ArtifactGem({ accent, rarityColor, rarity }: { accent: string; rarityColor: string; rarity: Rarity }) {
   const gemRef   = useRef<THREE.Mesh>(null);
@@ -66,7 +67,6 @@ function ArtifactGem({ accent, rarityColor, rarity }: { accent: string; rarityCo
         <octahedronGeometry args={[0.55, 0]} />
         <primitive object={innerMat} attach="material" />
       </mesh>
-      {/* Rarity core pulse */}
       <mesh ref={coreRef}>
         <octahedronGeometry args={[0.22, 0]} />
         <primitive object={coreMat} attach="material" />
@@ -150,7 +150,6 @@ function GlyphParticles({ accent, rarityColor, rarity }: { accent: string; rarit
     return g;
   }, [positions]);
 
-  // Rarity-specific extra particles
   const rarityPositions = useMemo(() => {
     if (rarity === 'rare') return null;
     const n = rarity === 'legendary' ? 30 : 16;
@@ -209,23 +208,22 @@ function ChamberEnvironment({ accent, rarityColor, rarity }: { accent: string; r
     color: rarityColor, transparent: true, opacity: rarity === 'legendary' ? 0.18 : 0.1,
   }), [rarityColor, rarity]);
 
+  void wallMat;
+
   const rings = [2.5, 4.5, 7];
 
   return (
     <group>
-      {/* Reflective floor */}
       <mesh material={floorMat} rotation={[-Math.PI / 2, 0, 0]} position={[0, -3, 0]} receiveShadow>
         <planeGeometry args={[30, 30]} />
       </mesh>
 
-      {/* Ground glyph rings */}
       <group rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.98, 0]}>
         {rings.map((r, i) => (
           <mesh key={i} material={glyphMat}>
             <ringGeometry args={[r - 0.03, r + 0.03, 64]} />
           </mesh>
         ))}
-        {/* Rarity accent ring */}
         {rarity !== 'rare' && (
           <mesh material={rarityRingMat}>
             <ringGeometry args={[1.8, 1.84, 48]} />
@@ -241,7 +239,6 @@ function ChamberEnvironment({ accent, rarityColor, rarity }: { accent: string; r
         })}
       </group>
 
-      {/* Lights */}
       <ambientLight color="#0d0520" intensity={0.6} />
       <directionalLight color={accent} intensity={0.5} position={[5, 10, 5]} castShadow />
       <pointLight color="#1a0050" intensity={1.5} position={[0, -1, 0]} distance={15} decay={2} />
@@ -259,9 +256,18 @@ interface ChamberSceneProps {
   productName: string;
   district?: District;
   rarity?: Rarity;
+  entityVisible?: boolean;
+  entityOpacity?: number;
 }
 
-export default function ChamberScene({ productTags, productName, district = 'gencore', rarity = 'rare' }: ChamberSceneProps) {
+export default function ChamberScene({
+  productTags: _productTags,
+  productName: _productName,
+  district    = 'gencore',
+  rarity      = 'rare',
+  entityVisible = false,
+  entityOpacity = 1,
+}: ChamberSceneProps) {
   const accent      = DISTRICT_COLORS[district].primary;
   const rarityColor = RARITY_COLORS[rarity];
 
@@ -287,6 +293,9 @@ export default function ChamberScene({ productTags, productName, district = 'gen
       )}
 
       <GlyphParticles accent={accent} rarityColor={rarityColor} rarity={rarity} />
+
+      {/* Entity — ANKHRON or OSYRON */}
+      <EntityManager district={district} visible={entityVisible} opacity={entityOpacity} />
 
       <OrbitControls
         enablePan={false}
