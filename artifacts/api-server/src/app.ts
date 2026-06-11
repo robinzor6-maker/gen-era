@@ -1,10 +1,11 @@
-import express, { type Express, type Request, type Response, type NextFunction } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
-import router from "./routes";
-import { logger } from "./lib/logger";
+import router from "./routes/index.js";
+import { logger } from "./lib/logger.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const app: Express = express();
 
@@ -59,7 +60,7 @@ app.use("/api/v1/webhooks/stripe", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
-// ─── Request Logging ──────────────────────────────────────────────────────
+// ─── Request Logging + Request ID ─────────────────────────────────────────
 app.use(
   pinoHttp({
     logger,
@@ -74,6 +75,12 @@ app.use(
   })
 );
 
+// ─── Forward Request ID as response header ────────────────────────────────
+app.use((req: Request, res: Response, next) => {
+  res.setHeader("X-Request-ID", String(req.id));
+  next();
+});
+
 // ─── API Routes ───────────────────────────────────────────────────────────
 app.use("/api", router);
 
@@ -82,11 +89,7 @@ app.use((_req: Request, res: Response) => {
   res.status(404).json({ success: false, message: "Route not found." });
 });
 
-// ─── Global Error Handler ─────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  logger.error(err, "Unhandled error");
-  res.status(500).json({ success: false, message: "Internal server error." });
-});
+// ─── Global Error Handler (must be last) ─────────────────────────────────
+app.use(errorHandler);
 
 export default app;

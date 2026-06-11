@@ -7,6 +7,7 @@ import collectionsRouter from "./collections.js";
 import paymentsRouter from "./payments.js";
 import webhooksRouter from "./webhooks.js";
 import adminRouter from "./admin.js";
+import swaggerRouter from "./swagger.js";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use("/v1/collections", collectionsRouter);
 router.use("/v1/payments",    paymentsRouter);
 router.use("/v1/webhooks",    webhooksRouter);
 router.use("/v1/admin",       adminRouter);
+router.use("/swagger",        swaggerRouter);
 
 export default router;

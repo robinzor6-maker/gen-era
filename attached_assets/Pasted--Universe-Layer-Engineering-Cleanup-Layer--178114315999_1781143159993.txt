@@ -1,0 +1,319 @@
+اختيار ممتاز.
+
+قبل ما ندخل في الـ Universe Layer، إنهاء **Engineering Cleanup Layer** هيخلي أي تطوير لاحق أسرع وأنظف وأقل أخطاء.
+
+# 🥇 STEP 7.5 — ENGINEERING CLEANUP & API POLISH
+
+## الهدف
+
+الانتقال من:
+
+```text
+Zod Validation + Legacy Validation + Mixed Responses
+```
+
+إلى:
+
+```text
+Zod Validation Only
++
+Unified Error System
++
+Unified Success Responses
++
+Centralized Logging
+```
+
+---
+
+# المرحلة 1: إزالة Legacy Validation
+
+## ابحث عن:
+
+```ts
+if (!email)
+if (!password)
+if (!name)
+if (!items.length)
+if (password.length < ...)
+```
+
+داخل:
+
+```text
+auth.ts
+orders.ts
+admin.ts
+products.ts
+```
+
+---
+
+## احذف فقط ما أصبح مغطى بواسطة Zod
+
+مثال:
+
+### قبل
+
+```ts
+if (!email || !password) {
+  return res.status(400).json({
+    success: false,
+    message: "Email and password required",
+  });
+}
+```
+
+### بعد
+
+```ts
+// removed
+// handled by Zod
+```
+
+---
+
+# المرحلة 2: Standard API Responses
+
+أنشئ:
+
+```text
+src/lib/apiResponse.ts
+```
+
+```ts
+export const successResponse = (
+  data: unknown,
+  message = "Success"
+) => ({
+  success: true,
+  message,
+  data,
+});
+
+export const errorResponse = (
+  message: string,
+  details?: unknown
+) => ({
+  success: false,
+  message,
+  details,
+});
+```
+
+---
+
+## بدلاً من:
+
+```ts
+res.json(user);
+```
+
+استخدم:
+
+```ts
+res.json(
+  successResponse(user)
+);
+```
+
+---
+
+# المرحلة 3: Global Error Handler
+
+أنشئ:
+
+```text
+src/middleware/errorHandler.ts
+```
+
+```ts
+import { Request, Response, NextFunction } from "express";
+
+export function errorHandler(
+  err: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  console.error(err);
+
+  res.status(500).json({
+    success: false,
+    message: "Internal Server Error",
+  });
+}
+```
+
+---
+
+## في app.ts
+
+آخر middleware:
+
+```ts
+app.use(errorHandler);
+```
+
+---
+
+# المرحلة 4: Async Wrapper
+
+أنشئ:
+
+```text
+src/lib/asyncHandler.ts
+```
+
+```ts
+import { RequestHandler } from "express";
+
+export const asyncHandler =
+  (fn: RequestHandler): RequestHandler =>
+  (req, res, next) =>
+    Promise.resolve(fn(req, res, next))
+      .catch(next);
+```
+
+---
+
+### قبل
+
+```ts
+router.post("/", async (req, res) => {
+ ...
+});
+```
+
+### بعد
+
+```ts
+router.post(
+  "/",
+  asyncHandler(async (req, res) => {
+    ...
+  })
+);
+```
+
+---
+
+# المرحلة 5: Request IDs
+
+إذا كنت تستخدم Pino بالفعل:
+
+أضف لكل response:
+
+```ts
+res.setHeader(
+  "X-Request-ID",
+  req.id
+);
+```
+
+---
+
+النتيجة:
+
+```json
+{
+  "success": false,
+  "message": "Validation Error",
+  "requestId": "req_7fd92a"
+}
+```
+
+---
+
+# المرحلة 6: Health Endpoint Upgrade
+
+إذا لم يوجد:
+
+```text
+GET /health
+```
+
+أضفه.
+
+يرجع:
+
+```json
+{
+  "status": "ok",
+  "database": "connected",
+  "version": "1.0.0",
+  "timestamp": "..."
+}
+```
+
+---
+
+# المرحلة 7: Security Headers Audit
+
+راجع:
+
+* Helmet ✔
+* CORS ✔
+* Rate Limiter ✔
+* JWT Expiry ✔
+* Refresh Token Rotation ✔
+* Cookie Security (لو مستخدمة) ✔
+
+---
+
+# المرحلة 8: API Documentation
+
+أضف:
+
+```text
+/swagger
+```
+
+باستخدام:
+
+```text
+swagger-ui-express
+```
+
+حتى يصبح عندك:
+
+```text
+https://api.gen-era.com/swagger
+```
+
+---
+
+# بعد إنهاء STEP 7.5
+
+هيكون تقييم الـ Backend تقريبًا:
+
+| Layer          | Status |
+| -------------- | ------ |
+| PostgreSQL     | ✅      |
+| JWT Auth       | ✅      |
+| Refresh Tokens | ✅      |
+| Zod Validation | ✅      |
+| Rate Limiting  | ✅      |
+| Admin System   | ✅      |
+| Unified Errors | ✅      |
+| API Docs       | ✅      |
+| Logging        | ✅      |
+
+### النتيجة
+
+```text
+9.2 / 10
+Production Ready Backend
+```
+
+بعدها مباشرة أنصح بالانتقال إلى:
+
+# 🌌 STEP 8 — TEMPLE LAYER
+
+* Product Statues
+* Interactive Temple
+* Character System
+* Collectibles
+* Try-On Integration
+
+لأن وقتها هيكون عندك أساس هندسي قوي جدًا تبني عليه تجربة GEN ERA كاملة.

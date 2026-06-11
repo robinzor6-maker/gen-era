@@ -69,21 +69,6 @@ router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: 
     }
   }
 
-  if (
-    !customer?.name?.trim() ||
-    !customer?.email?.trim() ||
-    !customer?.address?.trim() ||
-    !customer?.city?.trim()
-  ) {
-    res.status(400).json({ success: false, message: "Customer name, email, address and city are required." });
-    return;
-  }
-
-  if (!Array.isArray(items) || items.length === 0) {
-    res.status(400).json({ success: false, message: "Order must contain at least one item." });
-    return;
-  }
-
   type ResolvedItem = {
     productId: string;
     name: string;

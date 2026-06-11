@@ -40,15 +40,6 @@ export async function getUserFromToken(req: Request): Promise<DbUser | null> {
 router.post("/register", validateBody(registerBodySchema), async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
 
-  if (!name?.trim() || !email?.trim() || !password) {
-    res.status(400).json({ success: false, message: "Name, email and password are required." });
-    return;
-  }
-  if (password.length < 6) {
-    res.status(400).json({ success: false, message: "Password must be at least 6 characters." });
-    return;
-  }
-
   const normalizedEmail = email.trim().toLowerCase();
 
   const [existing] = await db
@@ -85,11 +76,6 @@ router.post("/register", validateBody(registerBodySchema), async (req: Request, 
 router.post("/login", validateBody(loginBodySchema), async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
-  if (!email?.trim() || !password) {
-    res.status(400).json({ success: false, message: "Email and password are required." });
-    return;
-  }
-
   const normalizedEmail = email.trim().toLowerCase();
   const [user] = await db
     .select()
@@ -117,11 +103,6 @@ router.post("/login", validateBody(loginBodySchema), async (req: Request, res: R
 // ── POST /api/v1/auth/refresh ───────────────────────────────────────────────
 router.post("/refresh", validateBody(refreshBodySchema), async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
-
-  if (!refreshToken) {
-    res.status(400).json({ success: false, message: "Refresh token is required." });
-    return;
-  }
 
   const userId = await AuthService.verifyRefreshToken(refreshToken);
   if (!userId) {
