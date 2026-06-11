@@ -2,6 +2,7 @@ import { Router, type Response } from "express";
 import { eq, desc, sql, count, sum } from "drizzle-orm";
 import { authenticate, requireRole, type AuthRequest } from "../middleware/auth.js";
 import { db, productsTable, ordersTable, orderItemsTable, usersTable } from "../lib/db.js";
+import { validateBody, createProductBodySchema, updateProductBodySchema, inventoryBodySchema, updateOrderStatusBodySchema, updateUserRoleBodySchema } from "../validation/index.js";
 
 const router = Router();
 
@@ -43,13 +44,13 @@ router.get("/products", async (_req: AuthRequest, res: Response) => {
   res.json({ success: true, data: rows });
 });
 
-router.post("/products", async (req: AuthRequest, res: Response) => {
+router.post("/products", validateBody(createProductBodySchema), async (req: AuthRequest, res: Response) => {
   const body = req.body;
   const [product] = await db.insert(productsTable).values(body).returning();
   res.status(201).json({ success: true, data: product });
 });
 
-router.put("/products/:id", async (req: AuthRequest, res: Response) => {
+router.put("/products/:id", validateBody(updateProductBodySchema), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { id: _id, createdAt: _c, ...updates } = req.body;
   const [product] = await db
@@ -69,13 +70,9 @@ router.delete("/products/:id", async (req: AuthRequest, res: Response) => {
 
 // ── INVENTORY ────────────────────────────────────────────────────────────
 
-router.patch("/inventory/:productId", async (req: AuthRequest, res: Response) => {
+router.patch("/inventory/:productId", validateBody(inventoryBodySchema), async (req: AuthRequest, res: Response) => {
   const { productId } = req.params;
   const { stock } = req.body;
-  if (typeof stock !== "number" || stock < 0) {
-    res.status(400).json({ success: false, message: "stock must be a non-negative number." });
-    return;
-  }
   const [product] = await db
     .update(productsTable)
     .set({ stock, updatedAt: new Date() })
@@ -92,7 +89,7 @@ router.get("/orders", async (_req: AuthRequest, res: Response) => {
   res.json({ success: true, data: rows });
 });
 
-router.patch("/orders/:id/status", async (req: AuthRequest, res: Response) => {
+router.patch("/orders/:id/status", validateBody(updateOrderStatusBodySchema), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { orderStatus, paymentStatus } = req.body;
 
@@ -127,13 +124,9 @@ router.get("/users", async (_req: AuthRequest, res: Response) => {
   res.json({ success: true, data: rows });
 });
 
-router.patch("/users/:id/role", async (req: AuthRequest, res: Response) => {
+router.patch("/users/:id/role", validateBody(updateUserRoleBodySchema), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { role } = req.body;
-  if (role !== "user" && role !== "admin") {
-    res.status(400).json({ success: false, message: "role must be 'user' or 'admin'." });
-    return;
-  }
   const [user] = await db
     .update(usersTable)
     .set({ role, updatedAt: new Date() })

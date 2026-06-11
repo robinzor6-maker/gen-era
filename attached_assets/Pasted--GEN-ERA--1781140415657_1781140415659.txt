@@ -1,0 +1,301 @@
+تمام — اختيارك هنا هو القرار “الاحترافي الصح” فعلاً. ده هيقفل أهم ثغرة في النظام ويخلي GEN ERA أقرب لمنتج Production حقيقي مش مجرد تجربة.
+
+هنبني دلوقتي:
+
+# 🛡️ STEP 7 — ZOD VALIDATION SYSTEM (FULL IMPLEMENTATION)
+
+---
+
+# 🎯 الهدف
+
+تحويل كل الـ API routes من:
+
+```ts
+if (!req.body.email) throw ...
+```
+
+إلى نظام احترافي:
+
+```ts
+validateRequest(schema)
+```
+
+بـ:
+
+* Zod Schemas مركزية
+* Middleware موحد
+* حماية لكل endpoints
+* Error handling consistent
+* قابل للتوسع
+
+---
+
+# 🧱 1. إنشاء Core Validation System
+
+## 📁 جديد:
+
+```
+artifacts/api-server/src/validation/
+  ├─ schemas/
+  │   ├─ auth.schema.ts
+  │   ├─ product.schema.ts
+  │   ├─ order.schema.ts
+  │   └─ admin.schema.ts
+  ├─ validateRequest.ts
+  └─ index.ts
+```
+
+---
+
+# 🧠 2. تثبيت Zod (لو مش موجود)
+
+```bash
+npm install zod
+```
+
+---
+
+# 🛡️ 3. Middleware أساسي — validateRequest.ts
+
+```ts
+import { Request, Response, NextFunction } from "express";
+import { ZodSchema } from "zod";
+
+export const validateRequest = (schema: ZodSchema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      schema.parse({
+        body: req.body,
+        query: req.query,
+        params: req.params,
+      });
+
+      next();
+    } catch (err: any) {
+      return res.status(400).json({
+        error: "Validation Error",
+        details: err.errors || err.message,
+      });
+    }
+  };
+};
+```
+
+---
+
+# 🔐 4. Auth Schema
+
+## 📁 auth.schema.ts
+
+```ts
+import { z } from "zod";
+
+export const registerSchema = z.object({
+  body: z.object({
+    name: z.string().min(2).max(50),
+    email: z.string().email(),
+    password: z.string().min(8),
+  }),
+});
+
+export const loginSchema = z.object({
+  body: z.object({
+    email: z.string().email(),
+    password: z.string().min(8),
+  }),
+});
+```
+
+---
+
+# 🛒 5. Product Schema
+
+## product.schema.ts
+
+```ts
+import { z } from "zod";
+
+export const productSchema = z.object({
+  body: z.object({
+    name: z.string().min(2),
+    price: z.number().positive(),
+    description: z.string().optional(),
+    category: z.string(),
+    stock: z.number().int().nonnegative(),
+    images: z.array(z.string().url()).optional(),
+  }),
+});
+```
+
+---
+
+# 📦 6. Order Schema (Critical)
+
+## order.schema.ts
+
+```ts
+import { z } from "zod";
+
+export const createOrderSchema = z.object({
+  body: z.object({
+    items: z.array(
+      z.object({
+        productId: z.string(),
+        quantity: z.number().int().positive(),
+      })
+    ),
+
+    customer: z.object({
+      name: z.string(),
+      email: z.string().email(),
+      phone: z.string().optional(),
+    }),
+
+    shippingAddress: z.object({
+      city: z.string(),
+      address: z.string(),
+    }),
+
+    paymentMethod: z.enum(["stripe", "cod"]),
+  }),
+});
+```
+
+---
+
+# 🧠 7. ربط الـ Validation في Routes
+
+## مثال — auth.ts
+
+### قبل:
+
+```ts
+router.post("/register", register);
+```
+
+### بعد:
+
+```ts
+import { validateRequest } from "../validation/validateRequest";
+import { registerSchema } from "../validation/schemas/auth.schema";
+
+router.post(
+  "/register",
+  validateRequest(registerSchema),
+  register
+);
+```
+
+---
+
+## مثال — orders.ts
+
+```ts
+router.post(
+  "/",
+  authenticate,
+  validateRequest(createOrderSchema),
+  createOrder
+);
+```
+
+---
+
+## مثال — products.ts (admin)
+
+```ts
+router.post(
+  "/",
+  authenticate,
+  requireRole("admin"),
+  validateRequest(productSchema),
+  createProduct
+);
+```
+
+---
+
+# ⚠️ 8. تحسين Error Handling (مهم جداً)
+
+## في app.ts
+
+```ts
+app.use((err, req, res, next) => {
+  console.error(err);
+
+  return res.status(500).json({
+    error: "Internal Server Error",
+  });
+});
+```
+
+---
+
+# 🧪 9. نتيجة النظام بعد التنفيذ
+
+## قبل:
+
+* أي request ممكن يدخل
+* runtime errors
+* احتمالية فساد بيانات
+
+---
+
+## بعد:
+
+| الحالة            | النتيجة                     |
+| ----------------- | --------------------------- |
+| missing field     | ❌ blocked قبل الوصول للـ DB |
+| wrong type        | ❌ rejected                  |
+| invalid email     | ❌ rejected                  |
+| bad order payload | ❌ rejected                  |
+| malformed product | ❌ rejected                  |
+
+---
+
+# 🔥 Impact الحقيقي
+
+## بعد Step 7:
+
+### النظام يصبح:
+
+* Production-grade API
+* Safe for real users
+* قابل للتوسع العالمي
+* جاهز لدمج mobile app أو AR app
+
+---
+
+# 🧭 بعد هذا مباشرة (الخطوة القادمة)
+
+بعد ما تخلص Zod:
+
+## 🌌 STEP 8 — GEN ERA UNIVERSE CORE
+
+* Try-On system الحقيقي
+* Product Statues داخل Temple
+* Interactive 3D objects
+* Character linking (ANKHRON / OSYRON)
+* NFC collectibles integration
+* Cinematic transitions
+
+---
+
+# 🚀 خلاصة
+
+أنت الآن قفلت:
+
+> 🛡️ “أهم طبقة في أي نظام إنتاجي: Input Validation Layer”
+
+وده اللي بيخلي أي شركة تقول:
+
+> “ده مشروع Production مش Demo”
+
+---
+
+# 👉 لما تخلص تطبيق ده قولي:
+
+## “Universe Layer”
+
+وأبدأ لك مباشرة:
+🔥 Try-On + Temple + Statues + Interaction System (أقوى مرحلة في المشروع كله)

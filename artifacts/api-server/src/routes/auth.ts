@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { AuthService } from "../services/authService.js";
 import { authenticate, type AuthRequest } from "../middleware/auth.js";
 import { db, usersTable } from "../lib/db.js";
+import { validateBody, registerBodySchema, loginBodySchema, refreshBodySchema, logoutBodySchema } from "../validation/index.js";
 
 const router = Router();
 
@@ -36,7 +37,7 @@ export async function getUserFromToken(req: Request): Promise<DbUser | null> {
 }
 
 // ── POST /api/v1/auth/register ──────────────────────────────────────────────
-router.post("/register", async (req: Request, res: Response) => {
+router.post("/register", validateBody(registerBodySchema), async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
 
   if (!name?.trim() || !email?.trim() || !password) {
@@ -81,7 +82,7 @@ router.post("/register", async (req: Request, res: Response) => {
 });
 
 // ── POST /api/v1/auth/login ─────────────────────────────────────────────────
-router.post("/login", async (req: Request, res: Response) => {
+router.post("/login", validateBody(loginBodySchema), async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   if (!email?.trim() || !password) {
@@ -114,7 +115,7 @@ router.post("/login", async (req: Request, res: Response) => {
 });
 
 // ── POST /api/v1/auth/refresh ───────────────────────────────────────────────
-router.post("/refresh", async (req: Request, res: Response) => {
+router.post("/refresh", validateBody(refreshBodySchema), async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
 
   if (!refreshToken) {
@@ -133,7 +134,7 @@ router.post("/refresh", async (req: Request, res: Response) => {
 });
 
 // ── POST /api/v1/auth/logout ────────────────────────────────────────────────
-router.post("/logout", async (req: Request, res: Response) => {
+router.post("/logout", validateBody(logoutBodySchema), async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
   if (refreshToken) {
     await AuthService.revokeRefreshToken(refreshToken);

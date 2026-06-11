@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getUserFromToken } from "./auth.js";
 import { db, productsTable, ordersTable, orderItemsTable } from "../lib/db.js";
+import { validateBody, createOrderBodySchema } from "../validation/index.js";
 
 const router = Router();
 
@@ -47,7 +48,7 @@ function formatOrder(
 }
 
 // POST /api/v1/orders  (guest or registered)
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: Response) => {
   const { customer, items, notes, idempotencyKey } = req.body;
   const authUser = await getUserFromToken(req);
 
