@@ -21,6 +21,10 @@ export const ordersTable = pgTable("orders", {
   paymentStatus: text("payment_status", {
     enum: ["unpaid", "paid", "refunded", "failed"],
   }).notNull().default("unpaid"),
+  paymentProvider: text("payment_provider", {
+    enum: ["stripe", "paymob"],
+  }),
+  paymentMethod: text("payment_method"),
   idempotencyKey: text("idempotency_key").unique(),
   paymentRef:    text("payment_ref"),
   stripeSessionId: text("stripe_session_id"),
@@ -33,6 +37,7 @@ export const ordersTable = pgTable("orders", {
   index("orders_email_idx").on(table.customerEmail),
   index("orders_status_idx").on(table.orderStatus),
   index("orders_payment_idx").on(table.paymentStatus),
+  index("orders_provider_idx").on(table.paymentProvider),
   index("orders_created_idx").on(table.createdAt),
 ]);
 

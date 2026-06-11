@@ -1,0 +1,259 @@
+إذا كنت في مرحلة الإطلاق الأولى لبراند **GEN ERA** وتريد:
+
+* 🇪🇬 العمل داخل مصر بسهولة.
+* 🌍 استقبال بعض المدفوعات من خارج مصر.
+* ⚡ سهولة الدمج البرمجي.
+* 🚀 إمكانية إضافة Stripe لاحقًا دون إعادة بناء النظام.
+
+فأنا لا أنصح بربط نظام الدفع مباشرة بمزود واحد داخل الكود.
+
+## الحل الاحترافي
+
+ابنِ طبقة Payment Abstraction Layer.
+
+بدل:
+
+```text
+Frontend
+   ↓
+Paymob
+```
+
+اجعلها:
+
+```text
+Frontend
+   ↓
+Payment API
+   ↓
+Payment Provider Layer
+   ↓
+Paymob
+Kashier
+Stripe (Future)
+```
+
+---
+
+# أفضل مزود حاليًا لحالتك
+
+## 🥇 Paymob
+
+يبقى الاختيار الأول.
+
+السبب:
+
+* يدعم مصر بالكامل.
+* يدعم بطاقات دولية Visa و Mastercard.
+* يدعم المحافظ الإلكترونية.
+* يدعم Fawry.
+* أسهل في التعاقد مقارنة بالعديد من البدائل.
+* مناسب جدًا لأول Drop لـ GEN ERA.
+
+---
+
+# المعمارية التي أوصي بها
+
+### لا تكتب:
+
+```ts
+new PaymobService()
+```
+
+في أي صفحة أو Route.
+
+### اكتب:
+
+```ts
+PaymentProvider
+```
+
+ثم:
+
+```ts
+interface PaymentProvider {
+  createCheckoutSession(): Promise<string>;
+  verifyPayment(): Promise<boolean>;
+  refundPayment(): Promise<boolean>;
+}
+```
+
+---
+
+## PaymobProvider
+
+```text
+providers/
+ └── PaymobProvider.ts
+```
+
+---
+
+## StripeProvider
+
+```text
+providers/
+ └── StripeProvider.ts
+```
+
+---
+
+## PaymentFactory
+
+```text
+services/
+ └── PaymentFactory.ts
+```
+
+مثال:
+
+```ts
+switch(provider) {
+ case "paymob":
+ case "stripe":
+ case "kashier":
+}
+```
+
+---
+
+# التعديل الذي أنصحك به في قاعدة البيانات
+
+داخل:
+
+```text
+lib/db/src/schema/orders.ts
+```
+
+أضف:
+
+```ts
+paymentProvider
+paymentMethod
+paymentStatus
+transactionId
+```
+
+---
+
+مثال:
+
+```json
+{
+  "paymentProvider": "paymob",
+  "paymentMethod": "visa",
+  "paymentStatus": "paid"
+}
+```
+
+---
+
+# التعديل في الـ API
+
+بدل:
+
+```text
+POST /payments/create
+```
+
+اجعل:
+
+```text
+POST /payments/checkout
+```
+
+Request:
+
+```json
+{
+  "provider": "paymob",
+  "orderId": "123"
+}
+```
+
+---
+
+# لماذا هذا مهم؟
+
+عندما تقرر بعد 6 أشهر إضافة Stripe:
+
+لن تحتاج إلى تعديل:
+
+* CheckoutPage
+* Cart
+* Orders
+* Database
+* Frontend
+
+ستضيف فقط:
+
+```text
+StripeProvider.ts
+```
+
+ثم:
+
+```json
+{
+  "provider": "stripe"
+}
+```
+
+وينتهي الأمر.
+
+---
+
+# بالنسبة لـ GEN ERA
+
+إذا كنت سأبني المشروع كمهندس مسؤول عن الإطلاق التجاري:
+
+### المرحلة الحالية
+
+```text
+Paymob
+```
+
+فقط.
+
+---
+
+### المرحلة الثانية
+
+```text
+Paymob
++
+Stripe
+```
+
+---
+
+### المرحلة الثالثة
+
+```text
+Paymob
+Stripe
+Apple Pay
+Google Pay
+```
+
+---
+
+## ما أطلبه منك الآن
+
+لا تبدأ بربط Paymob مباشرة داخل الصفحات.
+
+اجعل المهمة القادمة للمطور أو Cursor:
+
+### STEP 8.2.1
+
+**Build Provider-Agnostic Payment Architecture**
+
+بحيث يصبح GEN ERA قادرًا على التبديل بين:
+
+* Paymob
+* Kashier
+* Stripe
+
+من خلال إعداد واحد في الـ Backend دون أي تعديل في الـ Frontend.
+
+هذه هي البنية التي تستخدمها المنصات القابلة للتوسع، وستوفر عليك إعادة كتابة نظام الدفع بالكامل عندما تبدأ التوسع خارج مصر.
