@@ -15,6 +15,7 @@ import CommunityPage from "@/pages/CommunityPage";
 import TemplePage from "@/pages/TemplePage";
 import LorePage from "@/pages/LorePage";
 import ARPage from "@/pages/ARPage";
+import AdminPage from "@/pages/AdminPage";
 
 function NotFound() {
   return (
@@ -43,6 +44,7 @@ function Router() {
       <Route path="/temple" component={TemplePage} />
       <Route path="/lore" component={LorePage} />
       <Route path="/ar" component={ARPage} />
+      <Route path="/admin" component={AdminPage} />
       <Route component={NotFound} />
     </Switch>
   );
