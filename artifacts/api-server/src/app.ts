@@ -49,8 +49,28 @@ const authLimiter = rateLimit({
   message: { success: false, message: "Too many authentication attempts — please try again later." },
 });
 
+// Strict limiter for payment endpoints — prevent payment session flooding
+const paymentLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many payment attempts — please try again in 10 minutes.", code: "RATE_LIMITED" },
+});
+
+// Strict limiter for order creation — prevent order flooding
+const orderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many order requests — please try again later.", code: "RATE_LIMITED" },
+});
+
 app.use(globalLimiter);
 app.use("/api/v1/auth", authLimiter);
+app.use("/api/v1/payments", paymentLimiter);
+app.use("/api/v1/orders", orderLimiter);
 
 // ─── Webhook Raw Body (MUST be before express.json) ──────────────────────
 // Stripe needs the raw Buffer to verify signatures.

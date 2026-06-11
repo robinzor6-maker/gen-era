@@ -3,6 +3,13 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { getUserFromToken } from "./auth.js";
 import { db, productsTable, ordersTable, orderItemsTable } from "../lib/db.js";
 import { validateBody, createOrderBodySchema } from "../validation/index.js";
+import {
+  isValidOrderTransition,
+  isValidPaymentTransition,
+  type OrderStatus,
+  type PaymentStatus,
+} from "../lib/orderStateMachine.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -47,12 +54,12 @@ function formatOrder(
   };
 }
 
-// POST /api/v1/orders  (guest or registered)
+// ── POST /api/v1/orders  (guest or registered) ────────────────────────────────
 router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: Response) => {
   const { customer, items, notes, idempotencyKey } = req.body;
   const authUser = await getUserFromToken(req);
 
-  // ── Idempotency check — return existing order on duplicate request ─────
+  // ── Idempotency: return existing order on duplicate request ──────────
   if (idempotencyKey) {
     const [existing] = await db
       .select()
@@ -64,7 +71,12 @@ router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: 
         .select()
         .from(orderItemsTable)
         .where(eq(orderItemsTable.orderId, existing.id));
-      res.status(200).json({ success: true, data: formatOrder(existing, existingItems), duplicate: true });
+      logger.info({ idempotencyKey, orderId: existing.id }, "Idempotent order request — returning existing");
+      res.status(200).json({
+        success: true,
+        data: formatOrder(existing, existingItems),
+        duplicate: true,
+      });
       return;
     }
   }
@@ -82,14 +94,20 @@ router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: 
 
   try {
     const result = await db.transaction(async (tx) => {
-      // ── 1. Resolve all products from DB (authoritative prices) ──────────
+      // ── 1. Resolve all products from DB (authoritative prices) ───────
       const resolvedItems: ResolvedItem[] = [];
 
-      for (const item of items as Array<{ productId: string; quantity: number; selectedSize?: string; selectedColor?: string }>) {
+      for (const item of items as Array<{
+        productId: string;
+        quantity: number;
+        selectedSize?: string;
+        selectedColor?: string;
+      }>) {
         const qty = Math.max(1, item.quantity);
-
-        // Support lookup by DB UUID (new) OR slug (backward compat with old cart)
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.productId);
+        const isUUID =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            item.productId
+          );
 
         const [product] = await tx
           .select()
@@ -120,7 +138,7 @@ router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: 
         });
       }
 
-      // ── 2. Atomic stock deduction — one row-level check per item ────────
+      // ── 2. Atomic stock deduction — row-level check ──────────────────
       for (const item of resolvedItems) {
         const updated = await tx
           .update(productsTable)
@@ -141,10 +159,10 @@ router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: 
         }
       }
 
-      // ── 3. Compute authoritative total ───────────────────────────────────
+      // ── 3. Compute authoritative total ───────────────────────────────
       const totalPrice = resolvedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
-      // ── 4. Insert order record ───────────────────────────────────────────
+      // ── 4. Insert order ──────────────────────────────────────────────
       const [order] = await tx
         .insert(ordersTable)
         .values({
@@ -164,7 +182,7 @@ router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: 
         })
         .returning();
 
-      // ── 5. Insert order items ────────────────────────────────────────────
+      // ── 5. Insert order items ────────────────────────────────────────
       await tx.insert(orderItemsTable).values(
         resolvedItems.map((i) => ({
           orderId: order.id,
@@ -179,6 +197,7 @@ router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: 
         }))
       );
 
+      logger.info({ orderId: order.id, orderNumber: order.orderNumber, totalPrice }, "Order created");
       return { order, items: resolvedItems };
     });
 
@@ -186,6 +205,7 @@ router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: 
   } catch (err: any) {
     const status = err?.status ?? 500;
     const message = err?.message ?? "Failed to create order.";
+    logger.warn({ err: message, status }, "Order creation failed");
     if (status < 500) {
       res.status(status).json({ success: false, message });
     } else {
@@ -194,7 +214,7 @@ router.post("/", validateBody(createOrderBodySchema), async (req: Request, res: 
   }
 });
 
-// GET /api/v1/orders  (requires auth)
+// ── GET /api/v1/orders  (requires auth) ──────────────────────────────────────
 router.get("/", async (req: Request, res: Response) => {
   const authUser = await getUserFromToken(req);
   if (!authUser) {
@@ -202,21 +222,32 @@ router.get("/", async (req: Request, res: Response) => {
     return;
   }
 
-  const orderRows = authUser.role === "admin"
-    ? await db.select().from(ordersTable).orderBy(sql`${ordersTable.createdAt} DESC`)
-    : await db.select().from(ordersTable).where(eq(ordersTable.userId, authUser.id));
+  const orderRows =
+    authUser.role === "admin"
+      ? await db.select().from(ordersTable).orderBy(sql`${ordersTable.createdAt} DESC`)
+      : await db
+          .select()
+          .from(ordersTable)
+          .where(eq(ordersTable.userId, authUser.id));
 
   const result = await Promise.all(
     orderRows.map(async (order) => {
-      const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+      const items = await db
+        .select()
+        .from(orderItemsTable)
+        .where(eq(orderItemsTable.orderId, order.id));
       return formatOrder(order, items);
     })
   );
 
-  res.json({ success: true, data: result, pagination: { page: 1, limit: 50, total: result.length, pages: 1 } });
+  res.json({
+    success: true,
+    data: result,
+    pagination: { page: 1, limit: 50, total: result.length, pages: 1 },
+  });
 });
 
-// GET /api/v1/orders/:id  (requires auth — owner or admin)
+// ── GET /api/v1/orders/:id  (requires auth — owner or admin) ─────────────────
 router.get("/:id", async (req: Request, res: Response) => {
   const authUser = await getUserFromToken(req);
   if (!authUser) {
@@ -225,7 +256,8 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 
   const { id } = req.params;
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const isUUID =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
   const [order] = await db
     .select()
@@ -238,14 +270,87 @@ router.get("/:id", async (req: Request, res: Response) => {
     return;
   }
 
-  // Admins see all orders; registered users only see their own
   if (authUser.role !== "admin" && order.userId !== authUser.id) {
     res.status(403).json({ success: false, message: "Access denied." });
     return;
   }
 
-  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+  const items = await db
+    .select()
+    .from(orderItemsTable)
+    .where(eq(orderItemsTable.orderId, order.id));
   res.json({ success: true, data: formatOrder(order, items) });
+});
+
+// ── PATCH /api/v1/orders/:id/status  (admin only — state machine enforced) ───
+router.patch("/:id/status", async (req: Request, res: Response) => {
+  const authUser = await getUserFromToken(req);
+  if (!authUser || authUser.role !== "admin") {
+    res.status(403).json({ success: false, message: "Admin access required." });
+    return;
+  }
+
+  const { id } = req.params;
+  const { orderStatus, paymentStatus } = req.body ?? {};
+
+  if (!orderStatus && !paymentStatus) {
+    res.status(400).json({
+      success: false,
+      message: "At least one of orderStatus or paymentStatus is required.",
+    });
+    return;
+  }
+
+  const [order] = await db
+    .select()
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id))
+    .limit(1);
+
+  if (!order) {
+    res.status(404).json({ success: false, message: "Order not found." });
+    return;
+  }
+
+  // ── State machine validation ─────────────────────────────────────────
+  if (orderStatus && orderStatus !== order.orderStatus) {
+    if (!isValidOrderTransition(order.orderStatus, orderStatus)) {
+      res.status(422).json({
+        success: false,
+        message: `Invalid order status transition: ${order.orderStatus} → ${orderStatus}`,
+        code: "INVALID_TRANSITION",
+      });
+      return;
+    }
+  }
+
+  if (paymentStatus && paymentStatus !== order.paymentStatus) {
+    if (!isValidPaymentTransition(order.paymentStatus, paymentStatus)) {
+      res.status(422).json({
+        success: false,
+        message: `Invalid payment status transition: ${order.paymentStatus} → ${paymentStatus}`,
+        code: "INVALID_TRANSITION",
+      });
+      return;
+    }
+  }
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (orderStatus) updates.orderStatus = orderStatus;
+  if (paymentStatus) updates.paymentStatus = paymentStatus;
+
+  const [updated] = await db
+    .update(ordersTable)
+    .set(updates)
+    .where(eq(ordersTable.id, id))
+    .returning();
+
+  logger.info(
+    { orderId: id, orderStatus, paymentStatus, adminId: authUser.id },
+    "Order status updated by admin"
+  );
+
+  res.json({ success: true, data: updated });
 });
 
 export default router;

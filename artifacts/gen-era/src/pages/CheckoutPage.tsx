@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useCartStore } from '@/lib/store';
 import { useAuth } from '@/lib/hooks';
@@ -8,6 +8,11 @@ import StripePaymentForm from '@/components/checkout/StripePaymentForm';
 
 function formatPrice(price: number): string {
   return price.toLocaleString('ar-EG') + ' ج.م';
+}
+
+/** Generates a stable client-side idempotency key for this checkout session. */
+function generateIdempotencyKey(): string {
+  return `ck_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 type Step = 'shipping' | 'payment' | 'success';
@@ -29,6 +34,7 @@ export default function CheckoutPage() {
 
   const [step, setStep] = useState<Step>('shipping');
 
+  // ── Shipping fields ────────────────────────────────────────────────────────
   const [fullName, setFullName] = useState('');
   const [email,    setEmail]    = useState('');
   const [phone,    setPhone]    = useState('');
@@ -36,13 +42,18 @@ export default function CheckoutPage() {
   const [city,     setCity]     = useState('');
   const [notes,    setNotes]    = useState('');
 
+  // ── State ──────────────────────────────────────────────────────────────────
   const [validationError, setValidationError] = useState<string | null>(null);
   const [loading,         setLoading]         = useState(false);
   const [error,           setError]           = useState<string | null>(null);
-
   const [successOrder,    setSuccessOrder]    = useState<Order | null>(null);
   const [paymentSession,  setPaymentSession]  = useState<PaymentSession | null>(null);
   const [paymentError,    setPaymentError]    = useState<string | null>(null);
+
+  // ── Idempotency key — stable per page load, prevents double-order ──────────
+  const idempotencyKey = useRef<string>(generateIdempotencyKey());
+  // ── Submission lock — prevents double-click race conditions ───────────────
+  const submittingRef  = useRef<boolean>(false);
 
   useEffect(() => {
     if (user) {
@@ -51,7 +62,7 @@ export default function CheckoutPage() {
     }
   }, [user]);
 
-  // ── Step 1: Submit shipping → create order → initiate payment ────────────
+  // ── Step 1: Submit shipping → create order → initiate payment ─────────────
   const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
@@ -65,10 +76,14 @@ export default function CheckoutPage() {
       setValidationError('Your cart is empty.');
       return;
     }
-    if (loading) return;
+
+    // ── Double-submit guard ────────────────────────────────────────────────
+    if (submittingRef.current || loading) return;
+    submittingRef.current = true;
     setLoading(true);
 
     try {
+      // ── Create order (idempotent — safe to retry with same key) ─────────
       const orderRes = await api.post<OrderResponse>('/orders', {
         customer: {
           name:    fullName.trim(),
@@ -79,27 +94,38 @@ export default function CheckoutPage() {
         },
         items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
         notes: notes.trim(),
+        idempotencyKey: idempotencyKey.current,
       });
 
       if (!orderRes.success) {
-        throw new Error('Failed to create order. Please try again.');
+        throw new Error((orderRes as any).message || 'Failed to create order. Please try again.');
       }
 
       const orderId = orderRes.data._id;
 
-      const payRes = await api.post<{ success: boolean; data: PaymentSession }>(
+      // ── Initiate payment session ─────────────────────────────────────────
+      const payRes = await api.post<{ success: boolean; data: PaymentSession; code?: string }>(
         '/payments/initiate',
         { orderId, country: isEgyptCity(city.trim()) ? 'EG' : undefined }
       );
 
       if (!payRes.success) {
-        throw new Error('Failed to initiate payment. Please try again.');
+        const code    = (payRes as any).code;
+        const message = (payRes as any).message;
+
+        // If payment is already in progress (e.g. user hit back and resubmitted)
+        if (code === 'PAYMENT_IN_PROGRESS') {
+          setError('A payment is already in progress for this order. Please check your email for confirmation or wait a few minutes and try again.');
+          return;
+        }
+        throw new Error(message || 'Failed to initiate payment.');
       }
 
       const session = payRes.data;
       setPaymentSession(session);
 
       if (session.provider === 'cod') {
+        // COD — order is already marked paid server-side, clear cart
         setSuccessOrder(orderRes.data);
         clearCart();
         setStep('success');
@@ -118,17 +144,22 @@ export default function CheckoutPage() {
         return;
       }
 
+      // Fallthrough — treat as success
       setSuccessOrder(orderRes.data);
       clearCart();
       setStep('success');
     } catch (err: unknown) {
-      setError((err as Error).message || 'An unexpected error occurred.');
+      const msg = (err as Error).message || 'An unexpected error occurred.';
+      setError(msg);
+      // Reset idempotency key only on genuine errors so user can retry
+      // (not on network errors — same key is safe to reuse with idempotent endpoint)
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 
-  // ── Step 2: Stripe payment confirmed ─────────────────────────────────────
+  // ── Step 2: Stripe payment confirmed ──────────────────────────────────────
   const handleStripeSuccess = () => {
     setStep('success');
   };
@@ -137,7 +168,7 @@ export default function CheckoutPage() {
     setPaymentError(msg);
   };
 
-  // ── Render: Success ───────────────────────────────────────────────────────
+  // ── Render: Success ────────────────────────────────────────────────────────
   if (step === 'success') {
     return (
       <main className="product-detail-page success-page animate-fade-up" style={{ paddingBottom: '120px' }}>
@@ -164,7 +195,7 @@ export default function CheckoutPage() {
               <div><strong style={{ color: 'var(--sand)' }}>ACQUISITOR:</strong> {successOrder.customer?.name}</div>
               <div><strong style={{ color: 'var(--sand)' }}>DESTINATION:</strong> {successOrder.customer?.address}, {successOrder.customer?.city}</div>
               <div><strong style={{ color: 'var(--sand)' }}>TOTAL COST:</strong> {formatPrice(successOrder.totalPrice)}</div>
-              <div><strong style={{ color: 'var(--sand)' }}>STATUS:</strong> <span className="status-in-stock">{successOrder.status.toUpperCase()}</span></div>
+              <div><strong style={{ color: 'var(--sand)' }}>STATUS:</strong> <span className="status-in-stock">{successOrder.status?.toUpperCase()}</span></div>
             </div>
           )}
 
@@ -182,13 +213,17 @@ export default function CheckoutPage() {
     );
   }
 
-  // ── Render: Stripe Payment Step ───────────────────────────────────────────
+  // ── Render: Stripe Payment Step ────────────────────────────────────────────
   if (step === 'payment' && paymentSession?.clientSecret) {
     return (
       <main className="product-detail-page animate-fade-up" style={{ paddingBottom: '120px' }}>
         <header className="store-header">
           <div className="store-header-inner">
-            <button className="back-link font-mono" style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setStep('shipping')}>
+            <button
+              className="back-link font-mono"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => { setStep('shipping'); setPaymentError(null); }}
+            >
               ← BACK
             </button>
             <div className="store-title-wrap">
@@ -213,7 +248,7 @@ export default function CheckoutPage() {
 
             {paymentError && (
               <div className="validation-error font-mono" style={{ borderColor: 'var(--red-live)', color: 'var(--red-live)', background: 'rgba(204,17,17,0.05)', marginBottom: '16px' }}>
-                {paymentError}
+                ⚠ {paymentError}
               </div>
             )}
 
@@ -229,19 +264,7 @@ export default function CheckoutPage() {
     );
   }
 
-  // ── Render: Paymob redirect loading ──────────────────────────────────────
-  if (loading && city && isEgyptCity(city)) {
-    return (
-      <main className="product-detail-page animate-fade-up" style={{ paddingBottom: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="font-display text-glow-gold" style={{ fontSize: '2rem', marginBottom: '16px' }}>⚡</div>
-          <div className="font-mono" style={{ letterSpacing: '0.3em', color: 'var(--sand2)' }}>REDIRECTING TO PAYMENT...</div>
-        </div>
-      </main>
-    );
-  }
-
-  // ── Render: Shipping Form (Step 1) ────────────────────────────────────────
+  // ── Render: Shipping Form (Step 1) ─────────────────────────────────────────
   return (
     <main className="product-detail-page checkout-route-page animate-fade-up">
       <header className="store-header">
@@ -268,7 +291,12 @@ export default function CheckoutPage() {
         <div className="detail-container checkout-grid">
           {/* ── Shipping Form ── */}
           <div className="detail-visual-col">
-            <form id="checkout-form" onSubmit={handleShippingSubmit} className="visual-panel checkout-form-panel" style={{ padding: '30px', gap: '20px' }}>
+            <form
+              id="checkout-form"
+              onSubmit={handleShippingSubmit}
+              className="visual-panel checkout-form-panel"
+              style={{ padding: '30px', gap: '20px' }}
+            >
               <span className="corner-mark tl" aria-hidden="true" />
               <span className="corner-mark tr" aria-hidden="true" />
               <span className="corner-mark bl" aria-hidden="true" />
@@ -280,7 +308,7 @@ export default function CheckoutPage() {
 
               {isAuthenticated ? (
                 <div className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--green-neon)', background: 'rgba(0,255,136,0.05)', border: '1px solid rgba(0,255,136,0.15)', padding: '8px 12px', borderRadius: '4px' }}>
-                  ✓ LOGGED IN AS {user?.name?.toUpperCase()} — ORDER WILL BE LINKED TO YOUR ACCOUNT
+                  ✓ LOGGED IN AS {user?.name?.toUpperCase()} — ORDER LINKED TO YOUR ACCOUNT
                 </div>
               ) : (
                 <div className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--sand2)', background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.15)', padding: '8px 12px', borderRadius: '4px' }}>
@@ -291,28 +319,28 @@ export default function CheckoutPage() {
 
               <div className="form-group">
                 <label className="font-mono label-input">FULL NAME</label>
-                <input type="text" className="checkout-input font-cinzel" placeholder="Enter full name" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={loading} />
+                <input type="text" className="checkout-input font-cinzel" placeholder="Enter full name" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={loading} required />
               </div>
 
               <div className="form-grid-2">
                 <div className="form-group">
                   <label className="font-mono label-input">EMAIL ADDRESS</label>
-                  <input type="email" className="checkout-input font-mono" placeholder="acquisitor@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={loading} />
+                  <input type="email" className="checkout-input font-mono" placeholder="acquisitor@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={loading} required />
                 </div>
                 <div className="form-group">
                   <label className="font-mono label-input">PHONE NUMBER</label>
-                  <input type="tel" className="checkout-input font-mono" placeholder="01xxxxxxxxx" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} />
+                  <input type="tel" className="checkout-input font-mono" placeholder="01xxxxxxxxx" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} required />
                 </div>
               </div>
 
               <div className="form-grid-2">
                 <div className="form-group" style={{ flex: '2' }}>
                   <label className="font-mono label-input">DELIVERY ADDRESS</label>
-                  <input type="text" className="checkout-input font-cinzel" placeholder="Street address, apartment, building" value={address} onChange={(e) => setAddress(e.target.value)} disabled={loading} />
+                  <input type="text" className="checkout-input font-cinzel" placeholder="Street address, apartment, building" value={address} onChange={(e) => setAddress(e.target.value)} disabled={loading} required />
                 </div>
                 <div className="form-group">
                   <label className="font-mono label-input">CITY</label>
-                  <input type="text" className="checkout-input font-cinzel" placeholder="Cairo / Alexandria" value={city} onChange={(e) => setCity(e.target.value)} disabled={loading} />
+                  <input type="text" className="checkout-input font-cinzel" placeholder="Cairo / Alexandria" value={city} onChange={(e) => setCity(e.target.value)} disabled={loading} required />
                 </div>
               </div>
 
@@ -322,11 +350,11 @@ export default function CheckoutPage() {
               </div>
 
               {validationError && (
-                <div className="validation-error font-mono">{validationError}</div>
+                <div className="validation-error font-mono">⚠ {validationError}</div>
               )}
               {error && (
                 <div className="validation-error font-mono" style={{ borderColor: 'var(--red-live)', color: 'var(--red-live)', background: 'rgba(204,17,17,0.05)' }}>
-                  {error}
+                  ⚠ {error}
                 </div>
               )}
             </form>
@@ -381,8 +409,12 @@ export default function CheckoutPage() {
                   className="btn-fire checkout-submit-btn"
                   style={{ width: '100%', padding: '18px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
                   disabled={loading}
+                  aria-busy={loading}
                 >
-                  {loading ? 'PROCESSING TRANSACTION...' : 'CONTINUE TO PAYMENT ⚡'}
+                  {loading
+                    ? <><span className="spinner-inline" style={{ width: '14px', height: '14px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} /> PROCESSING...</>
+                    : 'CONTINUE TO PAYMENT ⚡'
+                  }
                 </button>
               </div>
             </div>

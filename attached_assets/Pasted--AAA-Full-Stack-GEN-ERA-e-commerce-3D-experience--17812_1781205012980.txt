@@ -1,0 +1,133 @@
+أنت مهندس برمجيات AAA Full-Stack تعمل على مشروع GEN ERA وهو نظام e-commerce + 3D experience.
+
+🎯 الهدف الحالي:
+تنفيذ مرحلة "Core Stability + Security Hardening + Payment Reliability Layer" فقط.
+ممنوع إضافة Features جديدة أو تغيير UI غير ضروري.
+
+---
+
+## 🧠 السياق الحالي للمشروع:
+- يوجد نظام Orders كامل في قاعدة البيانات
+- يوجد Payment providers (Stripe + Paymob + COD)
+- يوجد Checkout multi-step يعمل
+- يوجد Webhooks للمدفوعات
+- يوجد Cart system
+- يوجد 3D experience مرتبط بالمنتجات
+
+لكن:
+⚠️ لا يوجد ضمان قوي ضد الأخطاء، التكرار، أو التلاعب في الدفع
+⚠️ لا يوجد حماية كافية للـ API routes
+⚠️ لا يوجد validation صارم لكل المدخلات
+⚠️ لا يوجد حماية من duplicate webhooks أو duplicate orders
+
+---
+
+## 🎯 المطلوب تنفيذًا (بدقة شديدة):
+
+### 1. API Security Layer
+- تأمين كل routes الحساسة:
+  - /orders
+  - /checkout
+  - /payments
+  - /webhooks
+- إضافة validation صارم للـ request body (schema validation)
+- منع أي undefined / null payloads من الوصول للـ business logic
+- رفض أي request غير مكتمل بـ proper error response
+
+---
+
+### 2. Payment Reliability Hardening
+- منع إنشاء أكثر من payment session لنفس order
+- ضمان أن كل order له payment واحد فقط (idempotency)
+- إضافة idempotency key logic في:
+  - checkout
+  - payments initiate
+- التأكد أن webhook لا يغير نفس order مرتين بشكل خاطئ
+- حماية من duplicate webhook events (Stripe / Paymob)
+
+---
+
+### 3. Order State Machine Enforcement
+تطبيق strict rules على order status transitions:
+
+Allowed transitions فقط:
+- pending → paid
+- pending → cancelled
+- paid → shipped
+- shipped → delivered
+
+🚫 منع أي انتقال عشوائي أو غير منطقي
+🚫 منع إعادة order إلى حالة سابقة
+
+---
+
+### 4. Logging & Observability (Minimal but Critical)
+- تسجيل كل:
+  - payment attempt
+  - webhook event
+  - failed checkout attempt
+- إضافة structured logs (not console noise)
+- كل log يحتوي:
+  - orderId
+  - provider (stripe/paymob/cod)
+  - status
+  - timestamp
+
+---
+
+### 5. Failure Handling Layer
+- أي فشل في payment:
+  - لا يكسر checkout flow
+  - يرجع safe fallback state
+- أي webhook فاشل:
+  - يتم تجاهله بدون كسر النظام
+- أي missing env variable:
+  - fallback إلى COD mode تلقائيًا
+
+---
+
+### 6. Frontend Safety Layer (Minimal changes only)
+- منع double click على checkout submit
+- منع إعادة إرسال نفس الدفع مرتين
+- عرض loading states أثناء payment initiation
+- handling واضح لحالات:
+  - pending payment
+  - failed payment
+  - success payment
+
+---
+
+## 🧪 Acceptance Criteria (مهم جدًا):
+لن تعتبر المرحلة مكتملة إلا إذا:
+
+✔ يمكن تنفيذ checkout كامل بدون أي duplication في orders  
+✔ يمكن استقبال نفس webhook 10 مرات بدون كسر النظام  
+✔ أي payment failure لا يفسد cart أو order  
+✔ النظام يعمل حتى لو Stripe أو Paymob غير موجودين  
+✔ كل order له state واضح وصحيح دائمًا  
+✔ لا يوجد أي route غير محمي أو بدون validation  
+
+---
+
+## ⛔ قيود صارمة:
+- ممنوع إضافة features جديدة (no admin dashboard, no analytics)
+- ممنوع تغيير UI design
+- ممنوع تعديل 3D system إلا إذا سبب bug مباشر
+- ممنوع تحسينات غير مرتبطة بالأمان أو الثبات
+- أي تغيير يجب أن يخدم stability فقط
+
+---
+
+## 📦 مخرجاتك المطلوبة:
+بعد التنفيذ، أرجع بـ:
+
+1. ما الذي تم إصلاحه
+2. ما الذي تم تأمينه
+3. ما هي نقاط الضعف المتبقية
+4. هل النظام جاهز للمرحلة التالية (نعم/لا مع سبب)
+
+---
+
+## 🧠 مبدأ التنفيذ:
+Think like a production-grade payment system engineer at Stripe or Shopify.
+Prioritize correctness, idempotency, and system safety over features or UI.
