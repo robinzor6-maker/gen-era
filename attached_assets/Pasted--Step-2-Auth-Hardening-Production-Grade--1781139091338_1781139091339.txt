@@ -1,0 +1,337 @@
+تمام — هنبدأ **Step 2 (Auth Hardening)** بشكل احترافي “Production-Grade” زي أنظمة الشركات.
+
+هدف المرحلة دي:
+
+* إيقاف أي استخدام لـ SHA-256 + salt القديم ❌
+* تحويل النظام إلى:
+
+  * 🔐 bcrypt passwords
+  * 🔑 JWT access tokens (قصير العمر)
+  * 🔄 refresh tokens (مخزنة في DB)
+* ضمان أن تسجيل الدخول يبقى:
+
+  * آمن
+  * ثابت بعد الريستارت
+  * قابل للإلغاء (logout فعلي)
+
+---
+
+# 🧠 Step 2 — Auth Hardening (GEN ERA)
+
+## 🧱 1. Dependencies (لازم تتضاف الأول)
+
+شغل:
+
+```bash
+npm install bcrypt jsonwebtoken
+npm install -D @types/bcrypt @types/jsonwebtoken
+```
+
+---
+
+# 🗄️ 2. DB Schema Additions (مهم جدًا)
+
+## 📁 `lib/db/src/schema/sessions.ts`
+
+```ts
+import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
+import { users } from "./users";
+
+export const sessions = pgTable("sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+
+  refreshToken: text("refresh_token").notNull().unique(),
+
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+```
+
+---
+
+## 📁 update `schema/index.ts`
+
+```ts
+export * from "./sessions";
+```
+
+---
+
+# 🔐 3. Auth Service جديد (Core Logic)
+
+## 📁 `src/services/authService.ts`
+
+```ts
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import { db } from "@workspace/db";
+import { users } from "@workspace/db/schema/users";
+import { sessions } from "@workspace/db/schema/sessions";
+import { eq } from "drizzle-orm";
+
+const JWT_SECRET = process.env.JWT_SECRET!;
+
+// ─────────────────────────────
+// CREATE USER (REGISTER)
+// ─────────────────────────────
+export async function createUser(name: string, email: string, password: string) {
+  const hashed = await bcrypt.hash(password, 12);
+
+  const [user] = await db.insert(users).values({
+    name,
+    email,
+    password: hashed,
+  }).returning();
+
+  return user;
+}
+
+// ─────────────────────────────
+// LOGIN
+// ─────────────────────────────
+export async function loginUser(email: string, password: string) {
+  const user = await db.query.users.findFirst({
+    where: eq(users.email, email),
+  });
+
+  if (!user) throw new Error("Invalid credentials");
+
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) throw new Error("Invalid credentials");
+
+  const accessToken = jwt.sign(
+    { userId: user.id },
+    JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+
+  const refreshToken = crypto.randomBytes(40).toString("hex");
+
+  await db.insert(sessions).values({
+    userId: user.id,
+    refreshToken,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  });
+
+  return {
+    user,
+    accessToken,
+    refreshToken,
+  };
+}
+
+// ─────────────────────────────
+// VERIFY ACCESS TOKEN
+// ─────────────────────────────
+export function verifyAccessToken(token: string) {
+  return jwt.verify(token, JWT_SECRET) as { userId: string };
+}
+
+// ─────────────────────────────
+// REFRESH TOKEN
+// ─────────────────────────────
+export async function refreshAccessToken(refreshToken: string) {
+  const session = await db.query.sessions.findFirst({
+    where: eq(sessions.refreshToken, refreshToken),
+  });
+
+  if (!session) throw new Error("Invalid refresh token");
+
+  if (new Date(session.expiresAt) < new Date()) {
+    throw new Error("Refresh token expired");
+  }
+
+  const accessToken = jwt.sign(
+    { userId: session.userId },
+    JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+
+  return { accessToken };
+}
+
+// ─────────────────────────────
+// LOGOUT
+// ─────────────────────────────
+export async function logout(refreshToken: string) {
+  await db.delete(sessions).where(eq(sessions.refreshToken, refreshToken));
+}
+```
+
+---
+
+# 🌐 4. NEW AUTH ROUTES (V2)
+
+## 📁 `src/routes/authV2.ts`
+
+```ts
+import { Router } from "express";
+import {
+  createUser,
+  loginUser,
+  refreshAccessToken,
+  logout,
+  verifyAccessToken
+} from "../services/authService";
+
+const router = Router();
+
+// REGISTER
+router.post("/register", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    const user = await createUser(name, email, password);
+
+    const login = await loginUser(email, password);
+
+    res.json(login);
+  } catch (err: any) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// LOGIN
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const result = await loginUser(email, password);
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(401).json({ message: err.message });
+  }
+});
+
+// REFRESH
+router.post("/refresh", async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    const result = await refreshAccessToken(refreshToken);
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(401).json({ message: err.message });
+  }
+});
+
+// LOGOUT
+router.post("/logout", async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    await logout(refreshToken);
+
+    res.json({ success: true });
+  } catch {
+    res.status(400).json({ message: "Logout failed" });
+  }
+});
+
+// PROFILE (JWT)
+router.get("/profile", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) return res.status(401).json({ message: "No token" });
+
+    const payload = verifyAccessToken(token);
+
+    const user = await req.db.query.users.findFirst({
+      where: (users, { eq }) => eq(users.id, payload.userId),
+    });
+
+    res.json(user);
+  } catch {
+    res.status(401).json({ message: "Invalid token" });
+  }
+});
+
+export default router;
+```
+
+---
+
+# 🔐 5. Middleware جديد (JWT Auth)
+
+## 📁 `src/middleware/authJWT.ts`
+
+```ts
+import { verifyAccessToken } from "../services/authService";
+
+export function authJWT(req: any, res: any, next: any) {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+    const payload = verifyAccessToken(token);
+
+    req.user = payload;
+
+    next();
+  } catch {
+    res.status(401).json({ message: "Invalid token" });
+  }
+}
+```
+
+---
+
+# 🔁 6. المطلوب بعد تنفيذ الخطوة دي
+
+بعد ما تنفذ الكود ده، النظام هيتحول إلى:
+
+## ✅ AUTH SYSTEM FINAL STATE
+
+* bcrypt passwords 🔐
+* JWT access token (15 min) 🔑
+* refresh tokens stored in DB 🔄
+* logout الحقيقي ❌ session removal
+* auth persistence بعد restart ✅
+* secure login flow production-ready 🚀
+
+---
+
+# ⚠️ مهم جدًا
+
+بعد تنفيذ الخطوة:
+
+### لازم تشيل القديم:
+
+* SHA-256 auth ❌
+* Map token system ❌
+* auth.ts القديم ❌ (هنستبدله بـ V2)
+
+---
+
+# 🚀 بعد Step 2 مباشرة (الخطوة اللي بعدها)
+
+هنبدأ:
+
+## 👉 Step 3 — Order System Hardening
+
+* atomic stock locking
+* idempotency keys
+* payment integration prep
+* preventing duplicate orders
+
+---
+
+# 🧭 لو جاهز تكمل
+
+اكتب فقط:
+
+> "Step 3"
+
+وأبدأ لك نظام الطلبات الاحترافي اللي يخلي GEN ERA قابل للإنتاج الحقيقي على مستوى Shopify / Nike-level backend.
