@@ -10,4 +10,5 @@ export {
   artifactChamberVisitsTable,
   artifactClaimsTable,
   paymentsTable,
+  auditLogsTable,
 } from "@workspace/db";

@@ -6,3 +6,4 @@ export * from "./sessions";
 export * from "./wishlist";
 export * from "./analytics";
 export * from "./payments";
+export * from "./audit_logs";
