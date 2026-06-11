@@ -8,6 +8,10 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Trust the first proxy hop (Replit's reverse proxy) so rate-limiting
+// and IP detection work correctly with X-Forwarded-For headers.
+app.set("trust proxy", 1);
+
 // ─── Security Headers (helmet) ────────────────────────────────────────────
 app.use(
   helmet({
