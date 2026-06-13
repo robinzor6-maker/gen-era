@@ -11,4 +11,5 @@ export {
   artifactClaimsTable,
   paymentsTable,
   auditLogsTable,
+  cartItemsTable,
 } from "@workspace/db";

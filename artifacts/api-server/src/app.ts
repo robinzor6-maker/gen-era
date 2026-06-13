@@ -79,6 +79,8 @@ app.use("/api/v1/webhooks/stripe", express.raw({ type: "application/json" }));
 // ─── Body Parsing ─────────────────────────────────────────────────────────
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+import cookieParser from "cookie-parser";
+app.use(cookieParser());
 
 // ─── Request Logging + Request ID ─────────────────────────────────────────
 app.use(

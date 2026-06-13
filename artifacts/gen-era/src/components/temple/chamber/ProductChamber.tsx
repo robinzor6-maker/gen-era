@@ -98,7 +98,7 @@ export default function ProductChamber() {
 
   const handleAddToCart = () => {
     if (!product) return;
-    addToCart(product, 1, selectedSize, selectedColor);
+    // trigger ceremony — actual cart persistence happens when ceremony completes
     setAdded(true);
     startCeremony(product.name, accent);
 
@@ -112,7 +112,34 @@ export default function ProductChamber() {
     }).catch(() => {});
   };
 
-  const handleCeremonyComplete = () => {
+  const handleCeremonyComplete = async () => {
+    // Persist to server-side cart when claimed completes
+    try {
+      await api.post('/cart', { productId: product._id, quantity: 1, selectedSize, selectedColor });
+      // Refresh local store
+      const res = await api.get<{ success: boolean; items: any[] }>('/cart');
+      if (res && Array.isArray(res.items)) {
+        // populate global cart store
+        const storeModule = await import('@/lib/store');
+        const setStore = (storeModule as any).useCartStore.setState;
+        const loaded = res.items.map((it: any) => ({
+          productId: it.productId,
+          slug: it.product?.slug || '',
+          name: it.product?.name || '',
+          price: it.product?.price ?? 0,
+          image: it.product?.image ?? '',
+          quantity: it.quantity,
+          selectedSize: it.selectedSize,
+          selectedColor: it.selectedColor,
+        }));
+        const cartCount = loaded.reduce((sum, i) => sum + i.quantity, 0);
+        const cartTotal = loaded.reduce((sum, i) => sum + i.price * i.quantity, 0);
+        try { setStore({ items: loaded, cartCount, cartTotal }); } catch (e) { /* ignore */ }
+      }
+    } catch (err) {
+      console.error('Failed to persist claimed artifact to cart', err);
+    }
+
     endCeremony();
     setTimeout(() => setAdded(false), 800);
   };

@@ -14,73 +14,127 @@ interface CartStore {
   clearCart: () => void;
 }
 
-export const useCartStore = create<CartStore>()(
-  persist(
-    (set, get) => ({
-      items: [],
-      cartCount: 0,
-      cartTotal: 0,
-      isOpen: false,
-      setIsOpen: (open) => set({ isOpen: open }),
+export const useCartStore = create<CartStore>()((set, get) => ({
+  items: [],
+  cartCount: 0,
+  cartTotal: 0,
+  isOpen: false,
+  setIsOpen: (open) => set({ isOpen: open }),
 
-      addToCart: (product: Product, quantity = 1, selectedSize?: string, selectedColor?: string) => {
-        const { items } = get();
-        const existing = items.find((item) => item.productId === product._id);
+  addToCart: async (product: Product, quantity = 1, selectedSize?: string, selectedColor?: string) => {
+    try {
+      await api.post('/cart', { productId: product._id, quantity, selectedSize, selectedColor });
+      // Refresh cart from server
+      const res = await api.get<{ success: boolean; items: any[] }>('/cart');
+      const newItems = (res.items || []).map((it: any) => ({
+        productId: it.productId,
+        slug: it.product?.slug || product.slug,
+        name: it.product?.name || product.name,
+        price: it.product?.price ?? product.price,
+        image: it.product?.image ?? product.image,
+        quantity: it.quantity,
+        selectedSize: it.selectedSize,
+        selectedColor: it.selectedColor,
+      }));
 
-        let newItems: CartItem[];
-        if (existing) {
-          newItems = items.map((item) =>
-            item.productId === product._id
-              ? { ...item, quantity: item.quantity + quantity }
-              : item
-          );
-        } else {
-          const newItem: CartItem = {
-            productId: product._id,
-            slug: product.slug,
-            name: product.name,
-            price: product.price,
-            image: product.image,
-            quantity,
-            selectedSize,
-            selectedColor,
-          };
-          newItems = [...items, newItem];
-        }
-
-        const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
-        const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-
-        set({ items: newItems, cartCount, cartTotal, isOpen: true });
-      },
-
-      removeFromCart: (productId: string) => {
-        const newItems = get().items.filter((item) => item.productId !== productId);
-        const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
-        const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-        set({ items: newItems, cartCount, cartTotal });
-      },
-
-      updateQuantity: (productId: string, quantity: number) => {
-        if (quantity < 1) {
-          get().removeFromCart(productId);
-          return;
-        }
-        const newItems = get().items.map((item) =>
-          item.productId === productId ? { ...item, quantity } : item
-        );
-        const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
-        const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-        set({ items: newItems, cartCount, cartTotal });
-      },
-
-      clearCart: () => set({ items: [], cartCount: 0, cartTotal: 0 }),
-    }),
-    {
-      name: 'gen-era-cart',
+      const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
+      const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+      set({ items: newItems, cartCount, cartTotal, isOpen: true });
+    } catch (err) {
+      console.error('Failed to add to cart', err);
     }
-  )
-);
+  },
+
+  removeFromCart: async (productId: string) => {
+    try {
+      await api.delete(`/cart?productId=${encodeURIComponent(productId)}`);
+      const res = await api.get<{ success: boolean; items: any[] }>('/cart');
+      const newItems = (res.items || []).map((it: any) => ({
+        productId: it.productId,
+        slug: it.product?.slug || '',
+        name: it.product?.name || '',
+        price: it.product?.price ?? 0,
+        image: it.product?.image ?? '',
+        quantity: it.quantity,
+        selectedSize: it.selectedSize,
+        selectedColor: it.selectedColor,
+      }));
+      const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
+      const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+      set({ items: newItems, cartCount, cartTotal });
+    } catch (err) {
+      console.error('Failed to remove from cart', err);
+    }
+  },
+
+  updateQuantity: async (productId: string, quantity: number) => {
+    if (quantity < 1) {
+      get().removeFromCart(productId);
+      return;
+    }
+    try {
+      await api.post('/cart', { productId, quantity });
+      const res = await api.get<{ success: boolean; items: any[] }>('/cart');
+      const newItems = (res.items || []).map((it: any) => ({
+        productId: it.productId,
+        slug: it.product?.slug || '',
+        name: it.product?.name || '',
+        price: it.product?.price ?? 0,
+        image: it.product?.image ?? '',
+        quantity: it.quantity,
+        selectedSize: it.selectedSize,
+        selectedColor: it.selectedColor,
+      }));
+      const cartCount = newItems.reduce((sum, i) => sum + i.quantity, 0);
+      const cartTotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+      set({ items: newItems, cartCount, cartTotal });
+    } catch (err) {
+      console.error('Failed to update cart quantity', err);
+    }
+  },
+
+  clearCart: async () => {
+    try {
+      // No bulk clear endpoint yet; remove each
+      const items = get().items.slice();
+      for (const it of items) {
+        await api.delete(`/cart?productId=${encodeURIComponent(it.productId)}`);
+      }
+      set({ items: [], cartCount: 0, cartTotal: 0 });
+    } catch (err) {
+      console.error('Failed to clear cart', err);
+    }
+  },
+}));
+
+// Load cart on client
+if (typeof window !== 'undefined') {
+  (async () => {
+    try {
+      const res = await api.get<{ success: boolean; items: any[] }>('/cart');
+      if (res && Array.isArray(res.items)) {
+        const loaded = res.items.map((it: any) => ({
+          productId: it.productId,
+          slug: it.product?.slug || '',
+          name: it.product?.name || '',
+          price: it.product?.price ?? 0,
+          image: it.product?.image ?? '',
+          quantity: it.quantity,
+          selectedSize: it.selectedSize,
+          selectedColor: it.selectedColor,
+        }));
+        const cartCount = loaded.reduce((sum, i) => sum + i.quantity, 0);
+        const cartTotal = loaded.reduce((sum, i) => sum + i.price * i.quantity, 0);
+        // We can't call set directly here (outside store), so get store and set
+        const store = (await import('./store')).useCartStore as any;
+        // If store is available, set state
+        try { store.setState({ items: loaded, cartCount, cartTotal }); } catch (e) { /* ignore */ }
+      }
+    } catch (err) {
+      // ignore — user may be anonymous
+    }
+  })();
+}
 
 // ─── Wishlist Store ────────────────────────────────────────────────────────
 interface WishlistStore {

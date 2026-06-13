@@ -63,6 +63,8 @@ router.post("/register", validateBody(registerBodySchema), async (req: Request, 
   const accessToken  = AuthService.createAccessToken(user.id);
   const refreshToken = await AuthService.createRefreshToken(user.id);
 
+  const cookieOptions = { httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 };
+  res.cookie('session_token', refreshToken, cookieOptions);
   res.status(201).json({
     success: true,
     token: accessToken,
@@ -91,6 +93,8 @@ router.post("/login", validateBody(loginBodySchema), async (req: Request, res: R
   const accessToken  = AuthService.createAccessToken(user.id);
   const refreshToken = await AuthService.createRefreshToken(user.id);
 
+  const cookieOptions = { httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 };
+  res.cookie('session_token', refreshToken, cookieOptions);
   res.json({
     success: true,
     token: accessToken,

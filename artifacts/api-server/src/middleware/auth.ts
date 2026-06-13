@@ -41,6 +41,34 @@ export async function authenticate(
   next();
 }
 
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  const token = (req as any).cookies?.session_token ?? (req.cookies && (req.cookies as any).session_token);
+  if (!token) {
+    res.status(401).json({ success: false, message: "Authentication required." });
+    return;
+  }
+
+  const userId = await AuthService.verifyRefreshToken(token);
+  if (!userId) {
+    res.status(401).json({ success: false, message: "Invalid or expired session." });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  if (!user) {
+    res.status(401).json({ success: false, message: "User not found." });
+    return;
+  }
+
+  req.user = user;
+  next();
+}
+
 export function requireRole(role: "admin" | "user") {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {

@@ -26,7 +26,7 @@ async function request<T>(
     ...options.headers,
   };
 
-  const res = await fetch(url.toString(), { ...options, headers });
+  const res = await fetch(url.toString(), { ...options, headers, credentials: 'include' });
 
   const data = await res.json().catch(() => ({ success: false, message: 'Invalid JSON response' }));
 
