@@ -1,0 +1,107 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  pointer-events: auto;
+}
+
+.container {
+  width: 100%;
+  max-width: 480px;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  border: 2px solid #d4a853;
+  border-radius: 8px;
+  padding: 32px;
+  box-shadow: 0 0 60px rgba(212, 168, 83, 0.3), 0 0 120px rgba(212, 168, 83, 0.1);
+  animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.header h3 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #e0d5c8;
+  margin: 0 0 8px 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.order-id {
+  font-size: 12px;
+  color: #d4a853;
+  margin: 0;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.payment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.payment-element {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(212, 168, 83, 0.2);
+  border-radius: 4px;
+}
+
+.submit-button {
+  width: 100%;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #d4a853 0%, #c99a3a 100%);
+  color: #1a1a1a;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 12px rgba(212, 168, 83, 0.3);
+}
+
+.submit-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e0c070 0%, #d4a853 100%);
+  box-shadow: 0 6px 20px rgba(212, 168, 83, 0.5);
+  transform: translateY(-2px);
+}
+
+.submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.footer {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(212, 168, 83, 0.1);
+  text-align: center;
+}
+
+.disclaimer {
+  font-size: 12px;
+  color: #888;
+  margin: 0;
+}

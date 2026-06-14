@@ -1,0 +1,38 @@
+FROM node:24-alpine AS build
+WORKDIR /app
+RUN corepack enable pnpm && corepack prepare pnpm@latest --activate
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY artifacts/gen-era ./artifacts/gen-era/
+COPY lib ./lib/
+
+RUN pnpm install --frozen-lockfile
+
+RUN pnpm --filter @workspace/gen-era run build
+
+FROM nginx:alpine
+RUN rm /etc/nginx/conf.d/default.conf
+COPY --from=build /app/artifacts/gen-era/dist /usr/share/nginx/html
+
+COPY <<EOF /etc/nginx/conf.d/default.conf
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  location / {
+    try_files \$uri \$uri/ /index.html;
+  }
+
+  location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+
+  gzip on;
+  gzip_types text/plain text/css application/json application/javascript;
+}
+EOF
+
+EXPOSE 80

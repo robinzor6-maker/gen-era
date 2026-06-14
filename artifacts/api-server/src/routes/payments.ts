@@ -364,4 +364,111 @@ router.post(
   }
 );
 
+// ── Stripe Ceremony Payment Routes ──────────────────────────────────────────
+
+import express from "express";
+import { z } from "zod/v4";
+import {
+  createPaymentIntent,
+  handleWebhookEvent,
+  getOrderStatus,
+} from "../services/stripe.js";
+import { verifyToken } from "../middleware/auth.js";
+
+// ── POST /api/v1/payments/ceremony/create-intent ────────────────────────────
+// Create PaymentIntent for Claim Ceremony
+const ceremonyIntentSchema = z.object({
+  amount: z.number().int().min(1, "Amount must be at least 1 cent"),
+  currency: z.string().toLowerCase().default("usd"),
+  productId: z.string().min(1),
+  metadata: z.record(z.string()).optional(),
+});
+
+router.post(
+  "/ceremony/create-intent",
+  verifyToken,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const data = ceremonyIntentSchema.parse(req.body);
+
+      const result = await createPaymentIntent({
+        amount: data.amount,
+        currency: data.currency,
+        userId: req.user?.userId,
+        productId: data.productId,
+        metadata: data.metadata,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          clientSecret: result.clientSecret,
+          orderId: result.orderId,
+        },
+      });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        res.status(400).json({ success: false, message: err.errors[0].message });
+      } else {
+        logger.error({ err }, "Failed to create ceremony payment intent");
+        res.status(500).json({ success: false, message: "Failed to create payment intent" });
+      }
+    }
+  }
+);
+
+// ── POST /api/v1/payments/webhook ───────────────────────────────────────────
+// SECURITY NOTE: This endpoint is NOT protected by JWT; uses Stripe signature verification instead
+router.post("/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const sig = req.headers["stripe-signature"];
+
+    if (typeof sig !== "string") {
+      res.status(400).json({ success: false, message: "Missing stripe-signature header" });
+      return;
+    }
+
+    await handleWebhookEvent(req.body, sig);
+
+    res.json({ success: true, received: true });
+  } catch (err) {
+    logger.error({ err }, "Webhook handler error");
+    res.status(400).json({ success: false, message: "Webhook error" });
+  }
+});
+
+// ── GET /api/v1/payments/order/:id ──────────────────────────────────────────
+// SECURITY NOTE: Protected endpoint; users can only view their own orders
+router.get("/order/:id", verifyToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const order = await getOrderStatus(id);
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    // SECURITY NOTE: Ensure user can only access their own orders
+    if (order.userId && order.userId !== req.user?.userId) {
+      res.status(403).json({ success: false, message: "Forbidden" });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: order.id,
+        paymentStatus: order.paymentStatus,
+        totalPrice: order.totalPrice,
+        createdAt: order.createdAt,
+      },
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to get order status");
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 export default router;

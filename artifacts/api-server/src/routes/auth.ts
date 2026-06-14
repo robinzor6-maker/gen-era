@@ -1,135 +1,224 @@
-import { Router, Request, Response } from "express";
+import { Router, type Request, type Response } from "express";
+import { hash, compare } from "bcryptjs";
+import { sign, verify } from "jsonwebtoken";
+import { z } from "zod/v4";
+import { db } from "../lib/db.js";
+import { usersTable } from "../lib/db.js";
 import { eq } from "drizzle-orm";
-import { AuthService } from "../services/authService.js";
-import { authenticate, type AuthRequest } from "../middleware/auth.js";
-import { db, usersTable } from "../lib/db.js";
-import { validateBody, registerBodySchema, loginBodySchema, refreshBodySchema, logoutBodySchema } from "../validation/index.js";
+import { logger } from "../lib/logger.js";
+import type { JWTPayload } from "../middleware/auth.js";
 
 const router = Router();
 
-type DbUser = typeof usersTable.$inferSelect;
+// SECURITY NOTE: Redis would be production-grade; this implements in-memory blocklist for refresh tokens
+const refreshTokenBlocklist = new Set<string>();
 
-function safeUser(user: DbUser) {
-  return {
-    _id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    avatar: user.avatar,
-    isVerified: user.isVerified,
-    createdAt: user.createdAt,
-  };
-}
-
-// ── Shared helper: decode Bearer JWT → DB user (used by orders.ts) ─────────
-export async function getUserFromToken(req: Request): Promise<DbUser | null> {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) return null;
-  const token = header.slice(7);
-  const payload = AuthService.verifyAccessToken(token);
-  if (!payload) return null;
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, payload.userId))
-    .limit(1);
-  return user ?? null;
-}
-
-// ── POST /api/v1/auth/register ──────────────────────────────────────────────
-router.post("/register", validateBody(registerBodySchema), async (req: Request, res: Response) => {
-  const { name, email, password } = req.body;
-
-  const normalizedEmail = email.trim().toLowerCase();
-
-  const [existing] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
-    .limit(1);
-
-  if (existing) {
-    res.status(409).json({ success: false, message: "Email already registered." });
-    return;
-  }
-
-  const passwordHash = await AuthService.hashPassword(password);
-
-  const [user] = await db
-    .insert(usersTable)
-    .values({ name: name.trim(), email: normalizedEmail, passwordHash, role: "user", avatar: "" })
-    .returning();
-
-  const accessToken  = AuthService.createAccessToken(user.id);
-  const refreshToken = await AuthService.createRefreshToken(user.id);
-
-  const cookieOptions = { httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 };
-  res.cookie('session_token', refreshToken, cookieOptions);
-  res.status(201).json({
-    success: true,
-    token: accessToken,
-    accessToken,
-    refreshToken,
-    user: safeUser(user),
-  });
+// ── Schemas ───────────────────────────────────────────────────────────────────
+const registerSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
-// ── POST /api/v1/auth/login ─────────────────────────────────────────────────
-router.post("/login", validateBody(loginBodySchema), async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-
-  const normalizedEmail = email.trim().toLowerCase();
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
-    .limit(1);
-
-  if (!user || !(await AuthService.verifyPassword(password, user.passwordHash))) {
-    res.status(401).json({ success: false, message: "Invalid email or password." });
-    return;
-  }
-
-  const accessToken  = AuthService.createAccessToken(user.id);
-  const refreshToken = await AuthService.createRefreshToken(user.id);
-
-  const cookieOptions = { httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 };
-  res.cookie('session_token', refreshToken, cookieOptions);
-  res.json({
-    success: true,
-    token: accessToken,
-    accessToken,
-    refreshToken,
-    user: safeUser(user),
-  });
+const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password required"),
 });
 
-// ── POST /api/v1/auth/refresh ───────────────────────────────────────────────
-router.post("/refresh", validateBody(refreshBodySchema), async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
-
-  const userId = await AuthService.verifyRefreshToken(refreshToken);
-  if (!userId) {
-    res.status(401).json({ success: false, message: "Invalid or expired refresh token." });
-    return;
-  }
-
-  const accessToken = AuthService.createAccessToken(userId);
-  res.json({ success: true, accessToken, token: accessToken });
+const refreshSchema = z.object({
+  refreshToken: z.string().min(1, "Refresh token required"),
 });
 
-// ── POST /api/v1/auth/logout ────────────────────────────────────────────────
-router.post("/logout", validateBody(logoutBodySchema), async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
-  if (refreshToken) {
-    await AuthService.revokeRefreshToken(refreshToken);
+// ── Token Generation ──────────────────────────────────────────────────────────
+const generateAccessToken = (payload: Omit<JWTPayload, "iat" | "exp">): string => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error("JWT_SECRET not configured");
+  
+  return sign(payload, secret, { expiresIn: "15m" });
+};
+
+const generateRefreshToken = (userId: string): string => {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret) throw new Error("JWT_REFRESH_SECRET not configured");
+  
+  return sign({ userId }, secret, { expiresIn: "7d" });
+};
+
+const verifyRefreshToken = (token: string): { userId: string } => {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret) throw new Error("JWT_REFRESH_SECRET not configured");
+  
+  return verify(token, secret) as { userId: string };
+};
+
+// ── POST /auth/register ───────────────────────────────────────────────────────
+router.post("/register", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const data = registerSchema.parse(req.body);
+
+    const existing = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, data.email))
+      .limit(1);
+
+    if (existing.length > 0) {
+      res.status(400).json({ success: false, message: "Email already registered" });
+      return;
+    }
+
+    const bcryptRounds = parseInt(process.env.BCRYPT_ROUNDS || "12", 10);
+    const passwordHash = await hash(data.password, bcryptRounds);
+
+    const [user] = await db
+      .insert(usersTable)
+      .values({
+        email: data.email,
+        passwordHash,
+        role: "customer",
+      })
+      .returning();
+
+    if (!user) {
+      res.status(500).json({ success: false, message: "Failed to create user" });
+      return;
+    }
+
+    const accessToken = generateAccessToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role as "admin" | "customer",
+    });
+
+    const refreshToken = generateRefreshToken(user.id);
+
+    logger.info({ userId: user.id, email: user.email }, "User registered");
+
+    res.status(201).json({
+      success: true,
+      data: {
+        accessToken,
+        refreshToken,
+        user: { id: user.id, email: user.email, role: user.role },
+      },
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, message: err.errors[0].message });
+    } else {
+      logger.error({ err }, "Registration error");
+      res.status(500).json({ success: false, message: "Server error" });
+    }
   }
-  res.json({ success: true, message: "Logged out." });
 });
 
-// ── GET /api/v1/auth/profile ────────────────────────────────────────────────
-router.get("/profile", authenticate, async (req: AuthRequest, res: Response) => {
-  res.json({ success: true, data: safeUser(req.user!) });
+// ── POST /auth/login ──────────────────────────────────────────────────────────
+router.post("/login", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const data = loginSchema.parse(req.body);
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, data.email))
+      .limit(1);
+
+    if (!user) {
+      // SECURITY NOTE: Generic message prevents email enumeration attacks
+      res.status(401).json({ success: false, message: "Invalid email or password" });
+      return;
+    }
+
+    const isValid = await compare(data.password, user.passwordHash);
+
+    if (!isValid) {
+      res.status(401).json({ success: false, message: "Invalid email or password" });
+      return;
+    }
+
+    const accessToken = generateAccessToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role as "admin" | "customer",
+    });
+
+    const refreshToken = generateRefreshToken(user.id);
+
+    logger.info({ userId: user.id }, "User logged in");
+
+    res.json({
+      success: true,
+      data: {
+        accessToken,
+        refreshToken,
+        user: { id: user.id, email: user.email, role: user.role },
+      },
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, message: err.errors[0].message });
+    } else {
+      logger.error({ err }, "Login error");
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  }
+});
+
+// ── POST /auth/refresh ────────────────────────────────────────────────────────
+router.post("/refresh", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const data = refreshSchema.parse(req.body);
+
+    if (refreshTokenBlocklist.has(data.refreshToken)) {
+      res.status(401).json({ success: false, message: "Token has been revoked" });
+      return;
+    }
+
+    const payload = verifyRefreshToken(data.refreshToken);
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, payload.userId))
+      .limit(1);
+
+    if (!user) {
+      res.status(401).json({ success: false, message: "User not found" });
+      return;
+    }
+
+    const accessToken = generateAccessToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role as "admin" | "customer",
+    });
+
+    res.json({ success: true, data: { accessToken } });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, message: err.errors[0].message });
+    } else {
+      res.status(401).json({ success: false, message: "Invalid or expired refresh token" });
+    }
+  }
+});
+
+// ── POST /auth/logout ─────────────────────────────────────────────────────────
+router.post("/logout", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const data = refreshSchema.parse(req.body);
+
+    // SECURITY NOTE: Add to blocklist to prevent token reuse; production should use Redis with TTL
+    refreshTokenBlocklist.add(data.refreshToken);
+
+    res.json({ success: true, message: "Logged out successfully" });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, message: err.errors[0].message });
+    } else {
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  }
 });
 
 export default router;
+

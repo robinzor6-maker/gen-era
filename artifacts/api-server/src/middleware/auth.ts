@@ -1,84 +1,69 @@
-import { Request, Response, NextFunction } from "express";
-import { eq } from "drizzle-orm";
-import { AuthService } from "../services/authService.js";
-import { db, usersTable } from "../lib/db.js";
+import { type Request, type Response, type NextFunction } from "express";
+import { verify } from "jsonwebtoken";
+import { logger } from "../lib/logger.js";
 
-export interface AuthRequest extends Request {
-  user?: typeof usersTable.$inferSelect;
+// SECURITY NOTE: Extend Express.Request type to attach verified JWT payload
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JWTPayload;
+    }
+  }
 }
 
-export async function authenticate(
-  req: AuthRequest,
+export interface JWTPayload {
+  userId: string;
+  email: string;
+  role: "admin" | "customer";
+  iat: number;
+  exp: number;
+}
+
+const jwtSecret = process.env.JWT_SECRET;
+
+if (!jwtSecret) {
+  throw new Error("JWT_SECRET environment variable is required");
+}
+
+export const verifyToken = (
+  req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    res.status(401).json({ success: false, message: "Authentication required." });
-    return;
+): void => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ success: false, message: "Missing or invalid authorization header" });
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    const decoded = verify(token, jwtSecret) as JWTPayload;
+    req.user = decoded;
+    next();
+  } catch (err) {
+    if (err instanceof Error && err.name === "TokenExpiredError") {
+      res.status(401).json({ success: false, message: "Token expired" });
+    } else {
+      res.status(401).json({ success: false, message: "Invalid token" });
+    }
   }
+};
 
-  const token = header.slice(7);
-  const payload = AuthService.verifyAccessToken(token);
-
-  if (!payload) {
-    res.status(401).json({ success: false, message: "Invalid or expired token." });
-    return;
-  }
-
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, payload.userId))
-    .limit(1);
-
-  if (!user) {
-    res.status(401).json({ success: false, message: "User not found." });
-    return;
-  }
-
-  req.user = user;
-  next();
-}
-
-export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  const token = (req as any).cookies?.session_token ?? (req.cookies && (req.cookies as any).session_token);
-  if (!token) {
-    res.status(401).json({ success: false, message: "Authentication required." });
-    return;
-  }
-
-  const userId = await AuthService.verifyRefreshToken(token);
-  if (!userId) {
-    res.status(401).json({ success: false, message: "Invalid or expired session." });
-    return;
-  }
-
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, userId))
-    .limit(1);
-
-  if (!user) {
-    res.status(401).json({ success: false, message: "User not found." });
-    return;
-  }
-
-  req.user = user;
-  next();
-}
-
-export function requireRole(role: "admin" | "user") {
-  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+export const requireRole = (...allowedRoles: Array<"admin" | "customer">) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      res.status(401).json({ success: false, message: "Authentication required." });
+      res.status(401).json({ success: false, message: "Unauthorized" });
       return;
     }
-    if (req.user.role !== role && req.user.role !== "admin") {
-      res.status(403).json({ success: false, message: "Insufficient permissions." });
+
+    if (!allowedRoles.includes(req.user.role)) {
+      logger.warn({ userId: req.user.userId, role: req.user.role }, "Forbidden: insufficient permissions");
+      res.status(403).json({ success: false, message: "Forbidden: insufficient permissions" });
       return;
     }
+
     next();
   };
-}
+};
+

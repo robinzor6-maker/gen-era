@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { healthRouter } from "./health.js";
 
 const app: Express = express();
 
@@ -102,6 +103,9 @@ app.use((req: Request, res: Response, next) => {
   res.setHeader("X-Request-ID", String(req.id));
   next();
 });
+
+// ─── Health Check Endpoint (no rate limiting) ────────────────────────────
+app.use(healthRouter);
 
 // ─── API Routes ───────────────────────────────────────────────────────────
 app.use("/api", router);
